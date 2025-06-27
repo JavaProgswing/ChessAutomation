@@ -118,7 +118,6 @@ class ChessClient:
         self.from_sq = ""
         self.to_sq = ""
         self.move_timer = None
-        self.move_completed = False
         self.ws = None
         self.bots = []
         self.listening = True
@@ -234,25 +233,19 @@ class ChessClient:
                                 or self.side.get().lower() == "black"
                             )
                         ):
-                            self.move_completed = True
+
                             self.first_move = False
                             move = self.from_sq + self.to_sq
                             self.status.set(f"[Processing] {move}")
                             asyncio.run(self.send_move(move))
                             self.clear_buffer()
-                        elif (
-                            not self.from_sq
-                            and not self.to_sq
-                            and self.first_move
-                            and not self.move_completed
-                        ):
+                        elif not self.from_sq and not self.to_sq and self.first_move:
                             if self.side.get().lower() == "white":
                                 self.status.set("[Processing] White's first move")
-                                self.move_completed = True
                                 asyncio.run(self.send_move(None))
                             else:
                                 self.status.set("[Error] Incomplete move")
-                        elif not self.move_completed:
+                        else:
                             self.status.set("[Error] Incomplete move")
                             break
 
@@ -369,7 +362,6 @@ class ChessClient:
                             move = data["move"]
                             display = f"{move['piece']} {move['from']}→{move['to']}"
                             self.status.set(f"Suggested: {display}")
-                            self.move_completed = False
                     except Exception as e:
                         print("[ERROR] Malformed WS data:", msg, e)
         except Exception as e:
