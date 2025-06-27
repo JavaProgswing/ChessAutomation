@@ -277,6 +277,29 @@ class ChessAutomator:
             print(f"{self.square_index_to_alg(square)}: {color} {piece}")
         print()
 
+    def save_board_state_to_file(self, filename="engine_debug.txt"):
+        board_state = self.get_board_state()
+
+        def square_sort_key(sq):
+            file = sq[0]
+            rank = int(sq[1])
+            return (8 - rank) * 8 + ord(file) - ord("a")
+
+        sorted_squares = sorted(
+            board_state.keys(),
+            key=lambda s: square_sort_key(self.square_index_to_alg(s)),
+        )
+
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write("[BOARD STATE]\n")
+                for square in sorted_squares:
+                    piece, color = board_state[square]
+                    f.write(f"{self.square_index_to_alg(square)}: {color} {piece}\n")
+            print(f"[DEBUG] Board state saved to {filename}")
+        except Exception as e:
+            print(f"[ERROR] Could not write board state to file: {e}")
+
     def wait_for_engine_move(self, previous_state: dict, timeout: int = 35):
         print("[INFO] Waiting for engine move...")
 
@@ -314,10 +337,11 @@ class ChessAutomator:
                     "color": color,
                 }
 
-            time.sleep(0.2)
+            time.sleep(0.5)
 
         print("[ERROR] Timeout waiting for engine move.")
         self.driver.save_screenshot("engine_timeout.png")
+        self.save_board_state_to_file("engine_timeout_state.txt")
         raise TimeoutException("No move detected within the timeout period.")
 
     def complete_promotion(self, promote_to: str = "q"):
