@@ -329,9 +329,20 @@ class ChessClient:
                         elif "status" in data:
                             if data.get("type") == "init":
                                 self.bots = data.get("bots", [])
-                                self.status.set(
-                                    f"Current Bot: {data.get('current_bot', {}).get('name')}"
-                                )
+                                current_bot = data.get("current_bot", {})
+                                current_bot_name = current_bot.get("name", "Unknown")
+                                current_bot_rating = current_bot.get("rating", "N/A")
+                                current_bot = f"Current Bot: {current_bot_name} ({current_bot_rating})"
+                                if data["side"] == "white":
+                                    self.status.set(
+                                        "Press Alt + Enter to get suggestions."
+                                        f"\n{current_bot}\n"
+                                    )
+                                else:
+                                    self.status.set(
+                                        "Copy opponent's move then press Alt + Enter to get suggestions."
+                                        f"\n{current_bot}\n"
+                                    )
                             else:
                                 self.status.set(data["status"])
                         elif "move" in data:

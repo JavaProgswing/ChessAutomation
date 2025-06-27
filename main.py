@@ -64,10 +64,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Get bot list and current bot after loading
                 if not ChessAutomator.BOT_LOADED:
                     await asyncio.get_event_loop().run_in_executor(
-                        executor,
-                        lambda: chess_bot.select_bot(
-                            0
-                        ),  # click to trigger loading list
+                        executor, lambda: chess_bot.load_bot_list()
                     )
                 bots = [
                     {"id": b["id"], "name": b["name"], "is_engine": b["is_engine"]}

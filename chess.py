@@ -16,7 +16,7 @@ class ChessSide(Enum):
 
 
 class ChessAutomator:
-    BOTS = []  # Shared bot list across all instances
+    BOTS = []  # Shared bot list across all instances (only metadata)
     BOT_LOADED = False
 
     def __init__(self, side: ChessSide):
@@ -24,14 +24,12 @@ class ChessAutomator:
         self.profile = profiles.Windows()
         options = webdriver.ChromeOptions()
 
-        # Audio and GUI settings
-        options.add_argument("--mute-audio")  # Mute all sounds
-        options.add_argument("--headless=new")  # New headless mode (Chrome 109+)
-        options.add_argument("--disable-gpu")  # Disables GPU (often helps in headless)
+        options.add_argument("--mute-audio")
+        options.add_argument("--disable-gpu")
 
         prefs = {
-            "profile.default_content_setting_values.notifications": 2,  # Block notifications
-            "profile.managed_default_content_settings.images": 2,  # Disable image loading (faster)
+            "profile.default_content_setting_values.notifications": 2,
+            "profile.managed_default_content_settings.images": 2,
         }
         options.add_experimental_option("prefs", prefs)
         self.driver = Chrome(profile=self.profile, options=options)
@@ -39,7 +37,7 @@ class ChessAutomator:
 
         self.initial_state = None
         self.pending_promotion = None
-        self.selected_bot = None  # Store selected bot info
+        self.selected_bot = None
         self.open_analysis_and_start()
 
     def open_analysis_and_start(self):
@@ -51,22 +49,15 @@ class ChessAutomator:
 
         if self.side == ChessSide.WHITE:
             print("[INFO] Flipping board so engine plays black and user plays white.")
-
             settings_button = self.driver.find_element(By.ID, "board-controls-settings")
-            action = ActionChains(self.driver)
-            action.move_to_element(settings_button).perform()
-
-            # Wait for flip button to appear
+            ActionChains(self.driver).move_to_element(settings_button).perform()
             self.wait.until(
                 EC.presence_of_element_located((By.ID, "board-controls-flip"))
             )
             flip_button = self.driver.find_element(By.ID, "board-controls-flip")
-
-            # Use JS click to avoid animation problems
             self.driver.execute_script("arguments[0].click();", flip_button)
             print("[INFO] Board flipped.")
 
-        # Click “Practice vs Computer”
         self.wait.until(
             EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, 'button[aria-label="Practice vs Computer"]')
@@ -81,60 +72,107 @@ class ChessAutomator:
         self.driver.switch_to.window(self.driver.window_handles[-1])
         print("[INFO] Switched to new Practice tab.")
 
-        # Wait for the board to load
         self.wait.until(EC.presence_of_element_located((By.ID, "board-board")))
         self.initial_state = self.get_board_state()
+
+    def load_bot_list(self):
+        if ChessAutomator.BOT_LOADED:
+            return
+
+        try:
+            change_bot_button = self.wait.until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, 'button[aria-label="Change Bot"]')
+                )
+            )
+            self.driver.execute_script("arguments[0].click();", change_bot_button)
+
+            self.wait.until(
+                EC.presence_of_all_elements_located(
+                    (By.CSS_SELECTOR, "li.bot-component")
+                )
+            )
+            tiles = self.driver.find_elements(By.CSS_SELECTOR, "li.bot-component")
+
+            ChessAutomator.BOTS.clear()
+
+            for i, tile in enumerate(tiles):
+                if tile.find_elements(
+                    By.CSS_SELECTOR, "span.cc-icon-glyph.cc-icon-small.bot-lock"
+                ):
+                    continue
+
+                name = tile.get_attribute("data-bot-name")
+                classification = tile.get_attribute("data-bot-classification")
+                is_engine = classification.lower() == "engine"
+                avatar_url = None
+                try:
+                    img_el = tile.find_element(By.CSS_SELECTOR, "img.bot-img")
+                    avatar_url = img_el.get_attribute("src")
+                except:
+                    pass
+
+                ChessAutomator.BOTS.append(
+                    {
+                        "id": len(ChessAutomator.BOTS),
+                        "name": name,
+                        "is_engine": is_engine,
+                        "avatar": avatar_url,
+                    }
+                )
+
+            # ✅ Click back button so no bot is changed
+            try:
+                back_button = self.driver.find_element(
+                    By.CSS_SELECTOR, "button.selection-menu-back"
+                )
+                self.driver.execute_script("arguments[0].click();", back_button)
+            except:
+                pass
+
+            ChessAutomator.BOT_LOADED = True
+            print(f"[INFO] {len(ChessAutomator.BOTS)} bots loaded.")
+        except Exception as e:
+            raise Exception(f"[ERROR] Failed to load bot list: {e}")
 
     def select_bot(self, bot_id: int, engine_level: int | None = None):
         if not ChessAutomator.BOT_LOADED:
             print("[INFO] Loading bots list for the first time...")
             try:
-                change_bot_button = self.wait.until(
-                    EC.element_to_be_clickable(
-                        (By.CSS_SELECTOR, 'button[aria-label="Change Bot"]')
-                    )
-                )
-                self.driver.execute_script("arguments[0].click();", change_bot_button)
-                self.wait.until(
-                    EC.presence_of_all_elements_located(
-                        (By.CLASS_NAME, "bot-tile-component")
-                    )
-                )
-                tiles = self.driver.find_elements(By.CLASS_NAME, "bot-tile-component")
-
-                for i, tile in enumerate(tiles):
-                    try:
-                        name_el = tile.find_element(By.CLASS_NAME, "bot-tile-name")
-                        name = name_el.text.strip()
-                        is_engine = "engine" in tile.get_attribute("innerHTML").lower()
-                        ChessAutomator.BOTS.append(
-                            {
-                                "id": i,
-                                "name": name,
-                                "is_engine": is_engine,
-                                "tile": tile,
-                            }
-                        )
-                    except:
-                        continue
-                ChessAutomator.BOT_LOADED = True
-                print(f"[INFO] {len(ChessAutomator.BOTS)} bots loaded.")
+                self.load_bot_list()
             except Exception as e:
                 raise Exception(f"[ERROR] Failed to load bots: {e}")
 
         if bot_id < 0 or bot_id >= len(ChessAutomator.BOTS):
             raise ValueError(f"Bot ID {bot_id} is out of range.")
 
-        bot_info = ChessAutomator.BOTS[bot_id]
         try:
-            self.driver.execute_script("arguments[0].click();", bot_info["tile"])
-            print(f"[INFO] Bot '{bot_info['name']}' selected.")
-            self.selected_bot = self.get_current_bot()
-        except Exception as e:
-            raise Exception(f"[ERROR] Failed to click bot: {e}")
+            change_bot_button = self.wait.until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, 'button[aria-label="Change Bot"]')
+                )
+            )
+            self.driver.execute_script("arguments[0].click();", change_bot_button)
 
-        if bot_info["is_engine"] and engine_level is not None:
-            try:
+            self.wait.until(
+                EC.presence_of_all_elements_located(
+                    (By.CSS_SELECTOR, "li.bot-component")
+                )
+            )
+            tiles = self.driver.find_elements(By.CSS_SELECTOR, "li.bot-component")
+
+            selected_index = 0
+            for i, tile in enumerate(tiles):
+                name = tile.get_attribute("data-bot-name")
+                if name == ChessAutomator.BOTS[bot_id]["name"]:
+                    selected_index = i
+                    break
+
+            selected_tile = tiles[selected_index]
+            self.driver.execute_script("arguments[0].click();", selected_tile)
+            print(f"[INFO] Bot tile clicked: {ChessAutomator.BOTS[bot_id]['name']}")
+
+            if ChessAutomator.BOTS[bot_id]["is_engine"] and engine_level is not None:
                 slider = self.wait.until(
                     EC.presence_of_element_located(
                         (By.CSS_SELECTOR, 'input[type="range"]')
@@ -149,8 +187,22 @@ class ChessAutomator:
                     slider,
                 )
                 print(f"[INFO] Engine level set to {engine_level}")
-            except Exception as e:
-                raise Exception(f"[ERROR] Failed to set engine level: {e}")
+
+            choose_button = self.wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        '//button[contains(@class, "cc-button-primary")]//span[text()="Choose"]/ancestor::button',
+                    )
+                )
+            )
+            self.driver.execute_script("arguments[0].click();", choose_button)
+            print("[INFO] Bot selection confirmed.")
+
+            self.selected_bot = self.get_current_bot()
+
+        except Exception as e:
+            raise Exception(f"[ERROR] Failed to select bot: {e}")
 
     def get_current_bot(self):
         try:
