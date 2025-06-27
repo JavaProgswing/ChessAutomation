@@ -380,7 +380,7 @@ class ChessAutomator:
             print(f"[DEBUG] Found piece at {from_alg} (square-{from_sq})")
         except Exception as e:
             print(f"[ERROR] Could not find piece at {from_alg}: {e}")
-            return
+            raise ValueError(f"No chess pieces at {from_alg}.")
 
         # Click the piece to activate valid hints
         ActionChains(self.driver).move_to_element(piece_el).click().perform()
@@ -412,9 +412,7 @@ class ChessAutomator:
             )
         except Exception as e:
             print(f"[ERROR] Failed to click hint square {to_alg}: {e}")
-            raise Exception(
-                f"[ERROR] Could not complete opponent move {from_alg} → {to_alg}: {e}"
-            )
+            raise ValueError(f"Cannot move own chess piece at {from_alg}.")
 
         before = self.get_board_state()
         # Check if promotion window appears and current from_alg is a pawn
