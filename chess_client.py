@@ -239,10 +239,11 @@ class ChessClient:
                             self.status.set(f"[Processing] {move}")
                             asyncio.run(self.send_move(move))
                             self.clear_buffer()
-                        elif not self.from_sq and not self.to_sq and self.first_move:
+                        elif self.first_move:
                             if self.side.get().lower() == "white":
                                 self.status.set("[Processing] White's first move")
                                 asyncio.run(self.send_move(None))
+                                self.clear_buffer()
                             else:
                                 self.status.set("[Error] Incomplete move")
                         else:
