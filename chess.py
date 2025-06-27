@@ -16,6 +16,9 @@ class ChessSide(Enum):
 
 
 class ChessAutomator:
+    BOTS = []  # Shared bot list across all instances
+    BOT_LOADED = False
+
     def __init__(self, side: ChessSide):
         self.side = side
         self.profile = profiles.Windows()
@@ -80,6 +83,73 @@ class ChessAutomator:
         # Wait for the board to load
         self.wait.until(EC.presence_of_element_located((By.ID, "board-board")))
         self.initial_state = self.get_board_state()
+
+    def select_bot(self, bot_id: int, engine_level: int | None = None):
+        if not ChessAutomator.BOT_LOADED:
+            # Open the bot change menu
+            print("[INFO] Loading bots list for the first time...")
+            try:
+                change_bot_button = self.wait.until(
+                    EC.element_to_be_clickable(
+                        (By.CSS_SELECTOR, 'button[aria-label="Change Bot"]')
+                    )
+                )
+                self.driver.execute_script("arguments[0].click();", change_bot_button)
+                self.wait.until(
+                    EC.presence_of_all_elements_located(
+                        (By.CLASS_NAME, "bot-tile-component")
+                    )
+                )
+                tiles = self.driver.find_elements(By.CLASS_NAME, "bot-tile-component")
+
+                for i, tile in enumerate(tiles):
+                    try:
+                        name_el = tile.find_element(By.CLASS_NAME, "bot-tile-name")
+                        name = name_el.text.strip()
+                        is_engine = "engine" in tile.get_attribute("innerHTML").lower()
+                        ChessAutomator.BOTS.append(
+                            {
+                                "id": i,
+                                "name": name,
+                                "is_engine": is_engine,
+                                "tile": tile,
+                            }
+                        )
+                    except:
+                        continue
+                ChessAutomator.BOT_LOADED = True
+                print(f"[INFO] {len(ChessAutomator.BOTS)} bots loaded.")
+            except Exception as e:
+                raise Exception(f"[ERROR] Failed to load bots: {e}")
+
+        if bot_id < 0 or bot_id >= len(ChessAutomator.BOTS):
+            raise ValueError(f"Bot ID {bot_id} is out of range.")
+
+        bot_info = ChessAutomator.BOTS[bot_id]
+        try:
+            self.driver.execute_script("arguments[0].click();", bot_info["tile"])
+            print(f"[INFO] Bot '{bot_info['name']}' selected.")
+        except Exception as e:
+            raise Exception(f"[ERROR] Failed to click bot: {e}")
+
+        if bot_info["is_engine"] and engine_level is not None:
+            try:
+                slider = self.wait.until(
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, 'input[type="range"]')
+                    )
+                )
+                self.driver.execute_script(
+                    f"""
+                    arguments[0].value = {engine_level};
+                    arguments[0].dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    arguments[0].dispatchEvent(new Event('change', {{ bubbles: true }}));
+                """,
+                    slider,
+                )
+                print(f"[INFO] Engine level set to {engine_level}")
+            except Exception as e:
+                raise Exception(f"[ERROR] Failed to set engine level: {e}")
 
     def get_board_state(self) -> dict:
         """
