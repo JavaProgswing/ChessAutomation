@@ -118,6 +118,7 @@ class ChessClient:
         self.from_sq = ""
         self.to_sq = ""
         self.move_timer = None
+        self.move_completed = False
         self.ws = None
         self.bots = []
         self.listening = True
@@ -198,6 +199,7 @@ class ChessClient:
                                         )
                                         time.sleep(0.5)
                                     elif not self.to_sq:
+                                        self.move_completed = True
                                         self.to_sq = sq
                                         self.status.set(
                                             f"[To] {self.to_sq}\nAlt + 1 = cancel, Alt + 2 = promote, Alt + ` = confirm"
@@ -234,7 +236,7 @@ class ChessClient:
                                 self.first_move = False
                             else:
                                 self.status.set("[Error] Incomplete move")
-                        else:
+                        elif not self.move_completed:
                             self.status.set("[Error] Incomplete move")
                             break
 
@@ -351,6 +353,7 @@ class ChessClient:
                             move = data["move"]
                             display = f"{move['piece']} {move['from']}→{move['to']}"
                             self.status.set(f"Suggested: {display}")
+                            self.move_completed = False
                     except Exception as e:
                         print("[ERROR] Malformed WS data:", msg, e)
         except Exception as e:
