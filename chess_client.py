@@ -181,9 +181,20 @@ class ChessClient:
                 keys = []
                 start_time = time.time()
                 while time.time() - start_time < 10:
-                    if keyboard.is_pressed("alt+1"):
+                    if keyboard.is_pressed("alt+2"):
                         self.clear_buffer()
-                        self.status.set("[Cancelled] Move input cleared")
+                        self.status.set("[CANCELLED] Input cleared (Alt+2)")
+                        break
+
+                    if keyboard.is_pressed("alt+1"):
+                        if self.to_sq:
+                            self.to_sq = ""
+                            self.status.set("[BACK] Cleared 'To' square (Alt+1)")
+                        elif self.from_sq:
+                            self.from_sq = ""
+                            self.status.set("[BACK] Cleared 'From' square (Alt+1)")
+                        else:
+                            self.status.set("[BACK] Nothing to clear (Alt+1)")
                         break
 
                     for key in "abcdefgh12345678":
@@ -195,14 +206,14 @@ class ChessClient:
                                     if not self.from_sq:
                                         self.from_sq = sq
                                         self.status.set(
-                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 1 = cancel"
+                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 1 = back, Alt + 2 = cancel"
                                         )
                                         time.sleep(0.5)
                                     elif not self.to_sq:
-                                        self.move_completed = True
                                         self.to_sq = sq
+                                        self.move_completed = True
                                         self.status.set(
-                                            f"[To] {self.to_sq}\nAlt + 1 = cancel, Alt + 2 = promote, Alt + ` = confirm"
+                                            f"[To] {self.to_sq}\nAlt + 1 = back, Alt + 2 = cancel, Alt + ` = confirm"
                                         )
                                     keys.clear()
                                     if self.move_timer:
@@ -240,7 +251,7 @@ class ChessClient:
                             self.status.set("[Error] Incomplete move")
                             break
 
-                    if keyboard.is_pressed("alt+2"):
+                    if keyboard.is_pressed("alt+p"):  # Support Alt + P too
                         asyncio.run(self.send_promotion())
                         break
 
