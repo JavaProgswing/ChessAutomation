@@ -37,8 +37,8 @@ class ChessAutomator:
 
         self.initial_state = None
         self.pending_promotion = None
-        self.selected_bot = None
         self.open_analysis_and_start()
+        self.selected_bot = self.get_current_bot()
 
     def open_analysis_and_start(self):
         self.driver.get("https://www.chess.com/analysis?tab=analysis")
