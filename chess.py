@@ -316,6 +316,8 @@ class ChessAutomator:
             time.sleep(0.5)
 
         print("[ERROR] Timeout waiting for engine move.")
+        print("[INFO] Board state:")
+        self.print_board_state()
         raise TimeoutException("No move detected within the timeout period.")
 
     def complete_promotion(self, promote_to: str = "q"):

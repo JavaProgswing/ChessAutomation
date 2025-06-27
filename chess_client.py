@@ -47,10 +47,12 @@ class ChessClient:
         self.status.set(
             "\nChess Automation Client\n"
             "Press Alt + a-h1-8 (from)\n"
-            "then Alt + a-h1-8 (to) \n"
-            "Alt+Enter = confirm, Alt+P = promote, Alt+` = cancel\n"
-            "Alt+0 = pause & change bot"
-            "\n\nSelect your side and click Start to begin."
+            "then Alt + a-h1-8 (to)\n"
+            "Alt + ` = confirm\n"
+            "Alt + 1 = cancel\n"
+            "Alt + 2 = promote\n"
+            "Alt + 3 = change bot\n"
+            "\nSelect your side and click Start to begin."
         )
         self.status.trace_add("write", self.update_window_size)
 
@@ -163,7 +165,7 @@ class ChessClient:
 
     def run_key_listener(self):
         while True:
-            if keyboard.is_pressed("alt+0"):
+            if keyboard.is_pressed("alt+3"):
                 self.listening = not self.listening
                 if not self.listening:
                     self.show_bot_selector()
@@ -178,7 +180,7 @@ class ChessClient:
                 keys = []
                 start_time = time.time()
                 while time.time() - start_time < 10:
-                    if keyboard.is_pressed("alt+`"):
+                    if keyboard.is_pressed("alt+1"):
                         self.clear_buffer()
                         self.status.set("[Cancelled] Move input cleared")
                         break
@@ -192,13 +194,13 @@ class ChessClient:
                                     if not self.from_sq:
                                         self.from_sq = sq
                                         self.status.set(
-                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + ` = cancel"
+                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 1 = cancel"
                                         )
                                         time.sleep(0.5)
                                     elif not self.to_sq:
                                         self.to_sq = sq
                                         self.status.set(
-                                            f"[To] {self.to_sq}\nAlt + ` = cancel, Alt + P = promote, Alt + Enter = confirm"
+                                            f"[To] {self.to_sq}\nAlt + 1 = cancel, Alt + 2 = promote, Alt + ` = confirm"
                                         )
                                     keys.clear()
                                     if self.move_timer:
@@ -208,7 +210,7 @@ class ChessClient:
                                     )
                                     self.move_timer.start()
 
-                    if keyboard.is_pressed("alt+enter"):
+                    if keyboard.is_pressed("alt+`"):
                         if (
                             self.from_sq
                             and self.to_sq
@@ -236,7 +238,7 @@ class ChessClient:
                             self.status.set("[Error] Incomplete move")
                             break
 
-                    if keyboard.is_pressed("alt+p"):
+                    if keyboard.is_pressed("alt+2"):
                         asyncio.run(self.send_promotion())
                         break
 
@@ -335,12 +337,12 @@ class ChessClient:
                                 current_bot = f"Current Bot: {current_bot_name} ({current_bot_rating})"
                                 if data["side"] == "white":
                                     self.status.set(
-                                        "Press Alt + Enter to get suggestions."
+                                        "Press Alt + ` to get suggestions."
                                         f"\n{current_bot}\n"
                                     )
                                 else:
                                     self.status.set(
-                                        "Copy opponent's move then press Alt + Enter to get suggestions."
+                                        "Copy opponent's move then press Alt + ` to get suggestions."
                                         f"\n{current_bot}\n"
                                     )
                             else:
