@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox, simpledialog, ttk
 import threading
 import asyncio
 import websockets
@@ -21,7 +21,6 @@ class ChessClient:
         self.root.overrideredirect(True)
         self.root.configure(bg="black")
 
-        # Enable dragging the window
         self.offset_x = 0
         self.offset_y = 0
         self.root.bind("<Button-1>", self.start_move)
@@ -49,9 +48,9 @@ class ChessClient:
             "\nChess Automation Client\n"
             "Press Alt + a-h1-8 (from)\n"
             "then Alt + a-h1-8 (to) \n"
-            "Alt+Enter = confirm, Alt+P = promote, Alt+` = cancel"
-            "\n\n"
-            "Select your side and click Start to begin."
+            "Alt+Enter = confirm, Alt+P = promote, Alt+` = cancel\n"
+            "Alt+0 = pause & change bot"
+            "\n\nSelect your side and click Start to begin."
         )
         self.status.trace_add("write", self.update_window_size)
 
@@ -118,6 +117,8 @@ class ChessClient:
         self.to_sq = ""
         self.move_timer = None
         self.ws = None
+        self.bots = []
+        self.listening = True
 
     def start_move(self, event):
         self.offset_x = event.x
@@ -161,11 +162,18 @@ class ChessClient:
         self.to_sq = ""
 
     def run_key_listener(self):
-        print(
-            "[KEYBIND] Alt + a-h1-8 (from), then Alt + a-h1-8 (to), Alt+Enter = send, Alt+P = promote, Alt+` = cancel"
-        )
-
         while True:
+            if keyboard.is_pressed("alt+0"):
+                self.listening = not self.listening
+                if not self.listening:
+                    self.show_bot_selector()
+                time.sleep(0.5)
+                continue
+
+            if not self.listening:
+                time.sleep(0.1)
+                continue
+
             if keyboard.is_pressed("alt"):
                 keys = []
                 start_time = time.time()
@@ -184,18 +192,13 @@ class ChessClient:
                                     if not self.from_sq:
                                         self.from_sq = sq
                                         self.status.set(
-                                            f"[From] {self.from_sq}\n\n"
-                                            "Waiting for next square...\n"
-                                            "Press Alt + ` to cancel\n"
+                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + ` = cancel"
                                         )
                                         time.sleep(0.5)
                                     elif not self.to_sq:
                                         self.to_sq = sq
                                         self.status.set(
-                                            f"[To] {self.to_sq}\n\n"
-                                            "Press Alt + ` to cancel\n"
-                                            "Alt + P to promote\n"
-                                            "Alt + Enter to confirm"
+                                            f"[To] {self.to_sq}\nAlt + ` = cancel, Alt + P = promote, Alt + Enter = confirm"
                                         )
                                     keys.clear()
                                     if self.move_timer:
@@ -228,13 +231,9 @@ class ChessClient:
                                 asyncio.run(self.send_move(None))
                                 self.first_move = False
                             else:
-                                self.status.set(
-                                    "[Error] Incomplete move, press Alt + a-h1-8 (from) then Alt + a-h1-8 (to)"
-                                )
+                                self.status.set("[Error] Incomplete move")
                         else:
-                            self.status.set(
-                                "[Error] Incomplete move, press Alt + a-h1-8 (from) then Alt + a-h1-8 (to)"
-                            )
+                            self.status.set("[Error] Incomplete move")
                             break
 
                     if keyboard.is_pressed("alt+p"):
@@ -244,14 +243,44 @@ class ChessClient:
                     time.sleep(0.1)
             time.sleep(0.05)
 
+    def show_bot_selector(self):
+        def confirm():
+            index = bot_dropdown.current()
+            level = level_scale.get() if self.bots[index].get("is_engine") else None
+            asyncio.run(self.send_bot_selection(index, level))
+            selector.destroy()
+            self.listening = True
+
+        selector = tk.Toplevel(self.root)
+        selector.title("Select Bot")
+        selector.configure(bg="black")
+        selector.attributes("-topmost", True)
+        tk.Label(selector, text="Choose bot:", bg="black", fg="white").pack(pady=4)
+        bot_names = [
+            f"{b['name']} ({'ENGINE' if b['is_engine'] else 'BOT'})" for b in self.bots
+        ]
+        bot_dropdown = ttk.Combobox(selector, values=bot_names, state="readonly")
+        bot_dropdown.pack(pady=4)
+        level_label = tk.Label(selector, text="Engine level:", bg="black", fg="white")
+        level_scale = tk.Scale(
+            selector, from_=0, to=24, orient="horizontal", bg="black", fg="white"
+        )
+        bot_dropdown.bind(
+            "<<ComboboxSelected>>",
+            lambda e: (
+                (level_label.pack(pady=(4, 0)), level_scale.pack(pady=(0, 4)))
+                if self.bots[bot_dropdown.current()].get("is_engine")
+                else (level_label.pack_forget(), level_scale.pack_forget())
+            ),
+        )
+        tk.Button(selector, text="Select", command=confirm).pack(pady=4)
+
     async def send_move(self, move):
         try:
             if self.ws:
                 await self.ws.send(
                     json.dumps({"action": "next_move", "opponent_move": move})
                 )
-            else:
-                print("[ERROR] WebSocket not connected.")
         except Exception as e:
             self.status.set(f"[WS ERROR] {e}")
 
@@ -271,6 +300,14 @@ class ChessClient:
         else:
             self.status.set("Invalid promotion input.")
 
+    async def send_bot_selection(self, bot_id, engine_level=None):
+        if self.ws:
+            payload = {"action": "select_bot", "bot_id": bot_id}
+            if engine_level is not None:
+                payload["engine_level"] = engine_level
+            await self.ws.send(json.dumps(payload))
+            self.status.set(f"Bot changed to ID {bot_id}")
+
     def run_websocket_loop(self):
         asyncio.run(self.websocket_loop())
 
@@ -278,43 +315,33 @@ class ChessClient:
         try:
             async with websockets.connect(WS_URL) as websocket:
                 self.ws = websocket
-                print("[WS] Connected to server.")
                 await websocket.send(
                     json.dumps({"action": "init", "side": self.side.get()})
                 )
-
                 while True:
                     msg = await websocket.recv()
                     if str(msg).strip() == "":
                         continue
-                    print("[WS] Received:", msg)
                     try:
                         data = json.loads(msg)
                         if "error" in data:
-                            print("[SERVER ERROR]", data["error"])
                             self.status.set("Error: " + data["error"])
                         elif "status" in data:
-                            if data["type"] == "init":
-                                if data["side"] == "white":
-                                    self.status.set(
-                                        "Press Alt + Enter to get suggestions."
-                                    )
-                                else:
-                                    self.status.set(
-                                        "Copy opponent's move then press Alt + Enter to get suggestions."
-                                    )
+                            if data.get("type") == "init":
+                                self.bots = data.get("bots", [])
+                                self.status.set(
+                                    f"Current Bot: {data.get('current_bot', {}).get('name')}"
+                                )
                             else:
                                 self.status.set(data["status"])
                         elif "move" in data:
                             move = data["move"]
                             display = f"{move['piece']} {move['from']}→{move['to']}"
                             self.status.set(f"Suggested: {display}")
-                            print("[ENGINE MOVE]", display)
                     except Exception as e:
                         print("[ERROR] Malformed WS data:", msg, e)
         except Exception as e:
-            print(f"[WS ERROR] {e}")
-            self.status.set("Disconnected, reconnecting...")
+            self.status.set("Disconnected")
 
 
 if __name__ == "__main__":
