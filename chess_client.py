@@ -211,7 +211,6 @@ class ChessClient:
                                         time.sleep(0.5)
                                     elif not self.to_sq:
                                         self.to_sq = sq
-                                        self.move_completed = True
                                         self.status.set(
                                             f"[To] {self.to_sq}\nAlt + 1 = back, Alt + 2 = cancel, Alt + ` = confirm"
                                         )
@@ -235,16 +234,22 @@ class ChessClient:
                                 or self.side.get().lower() == "black"
                             )
                         ):
+                            self.move_completed = True
                             self.first_move = False
                             move = self.from_sq + self.to_sq
                             self.status.set(f"[Processing] {move}")
                             asyncio.run(self.send_move(move))
                             self.clear_buffer()
-                        elif not self.from_sq and not self.to_sq and self.first_move:
+                        elif (
+                            not self.from_sq
+                            and not self.to_sq
+                            and self.first_move
+                            and not self.move_completed
+                        ):
                             if self.side.get().lower() == "white":
                                 self.status.set("[Processing] White's first move")
+                                self.move_completed = True
                                 asyncio.run(self.send_move(None))
-                                self.first_move = False
                             else:
                                 self.status.set("[Error] Incomplete move")
                         elif not self.move_completed:
