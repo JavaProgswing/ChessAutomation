@@ -31,6 +31,7 @@ class ChessAutomator:
             "profile.default_content_setting_values.notifications": 2,
             "profile.managed_default_content_settings.images": 2,
         }
+        prefs = {}
         options.add_experimental_option("prefs", prefs)
         self.driver = Chrome(profile=self.profile, options=options)
         self.wait = WebDriverWait(self.driver, 15)
@@ -313,11 +314,10 @@ class ChessAutomator:
                     "color": color,
                 }
 
-            time.sleep(0.5)
+            time.sleep(0.2)
 
         print("[ERROR] Timeout waiting for engine move.")
-        print("[INFO] Board state:")
-        self.print_board_state()
+        self.driver.save_screenshot("engine_timeout.png")
         raise TimeoutException("No move detected within the timeout period.")
 
     def complete_promotion(self, promote_to: str = "q"):
