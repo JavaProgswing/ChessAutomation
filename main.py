@@ -21,20 +21,16 @@ async def websocket_endpoint(websocket: WebSocket):
     connections[client_id] = websocket
     print(f"[WS] Client {client_id} connected.")
 
-    # Create a separate ChessAutomator instance for this connection
     chess_bot = None
-
-    # ThreadPoolExecutor for blocking operations
     executor = concurrent.futures.ThreadPoolExecutor()
 
-    # Keep-alive coroutine
     async def keep_alive():
         try:
             while True:
                 await asyncio.sleep(10)
                 await websocket.send_text(" ")
         except Exception:
-            pass  # Ignore keepalive send errors
+            pass
 
     keepalive_task = asyncio.create_task(keep_alive())
 
@@ -58,18 +54,36 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json({"error": "Invalid side."})
                     continue
 
-                # Create automator instance for the selected side
                 chess_bot = await asyncio.get_event_loop().run_in_executor(
                     executor,
                     lambda: ChessAutomator(
                         ChessSide.WHITE if side == "white" else ChessSide.BLACK
                     ),
                 )
+
+                # Get bot list and current bot after loading
+                if not ChessAutomator.BOT_LOADED:
+                    await asyncio.get_event_loop().run_in_executor(
+                        executor,
+                        lambda: chess_bot.select_bot(
+                            0
+                        ),  # click to trigger loading list
+                    )
+                bots = [
+                    {"id": b["id"], "name": b["name"], "is_engine": b["is_engine"]}
+                    for b in ChessAutomator.BOTS
+                ]
+                current = await asyncio.get_event_loop().run_in_executor(
+                    executor, lambda: chess_bot.selected_bot
+                )
+
                 await websocket.send_json(
                     {
                         "status": f"Initialized as {side.upper()}.",
                         "type": "init",
                         "side": side.lower(),
+                        "bots": bots,
+                        "current_bot": current,
                     }
                 )
 

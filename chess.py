@@ -39,6 +39,7 @@ class ChessAutomator:
 
         self.initial_state = None
         self.pending_promotion = None
+        self.selected_bot = None  # Store selected bot info
         self.open_analysis_and_start()
 
     def open_analysis_and_start(self):
@@ -86,7 +87,6 @@ class ChessAutomator:
 
     def select_bot(self, bot_id: int, engine_level: int | None = None):
         if not ChessAutomator.BOT_LOADED:
-            # Open the bot change menu
             print("[INFO] Loading bots list for the first time...")
             try:
                 change_bot_button = self.wait.until(
@@ -129,6 +129,7 @@ class ChessAutomator:
         try:
             self.driver.execute_script("arguments[0].click();", bot_info["tile"])
             print(f"[INFO] Bot '{bot_info['name']}' selected.")
+            self.selected_bot = self.get_current_bot()
         except Exception as e:
             raise Exception(f"[ERROR] Failed to click bot: {e}")
 
@@ -150,6 +151,23 @@ class ChessAutomator:
                 print(f"[INFO] Engine level set to {engine_level}")
             except Exception as e:
                 raise Exception(f"[ERROR] Failed to set engine level: {e}")
+
+    def get_current_bot(self):
+        try:
+            container = self.wait.until(
+                EC.presence_of_element_located((By.CLASS_NAME, "player-row-component"))
+            )
+            name_el = container.find_element(
+                By.CSS_SELECTOR, '[data-test-element="user-tagline-username"]'
+            )
+            rating_el = container.find_element(By.CLASS_NAME, "cc-user-rating-white")
+            return {
+                "name": name_el.text.strip(),
+                "rating": rating_el.text.strip().strip("()"),
+            }
+        except Exception as e:
+            print(f"[WARN] Failed to fetch current bot info: {e}")
+            return None
 
     def get_board_state(self) -> dict:
         """
