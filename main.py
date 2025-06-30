@@ -1,3 +1,4 @@
+import traceback
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from chess import ChessAutomator, ChessSide
 from typing import Dict
@@ -96,6 +97,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                     await websocket.send_json({"move": move})
                 except Exception as e:
+                    traceback.print_exc()
                     await websocket.send_json({"error": str(e)})
 
             elif action == "promote":
@@ -129,4 +131,5 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app=app, host="0.0.0.0", port=8000)
+    # uvicorn.run("main:app", reload=True)

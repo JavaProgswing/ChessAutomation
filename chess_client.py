@@ -49,9 +49,10 @@ class ChessClient:
             "Press Alt + a-h1-8 (from)\n"
             "then Alt + a-h1-8 (to)\n"
             "Alt + ` = confirm\n"
-            "Alt + 1 = cancel\n"
-            "Alt + 2 = promote\n"
+            "Alt + 1 = back\n"
+            "Alt + 2 = cancel\n"
             "Alt + 3 = change bot\n"
+            "Alt + p = promote\n"
             "\nSelect your side and click Start to begin."
         )
         self.status.trace_add("write", self.update_window_size)
@@ -164,8 +165,11 @@ class ChessClient:
         self.to_sq = ""
 
     def run_key_listener(self):
+        self.processing = False
         while True:
-            if keyboard.is_pressed("alt+3"):
+            if keyboard.is_pressed("alt+3") and (
+                not any([keyboard.is_pressed(key) for key in "abcdefgh"])
+            ):
                 self.listening = not self.listening
                 if not self.listening:
                     self.show_bot_selector()
@@ -180,12 +184,16 @@ class ChessClient:
                 keys = []
                 start_time = time.time()
                 while time.time() - start_time < 10:
-                    if keyboard.is_pressed("alt+2"):
+                    if keyboard.is_pressed("alt+2") and (
+                        not any([keyboard.is_pressed(key) for key in "abcdefgh"])
+                    ):
                         self.clear_buffer()
                         self.status.set("[CANCELLED] Input cleared (Alt+2)")
                         break
 
-                    if keyboard.is_pressed("alt+1"):
+                    if keyboard.is_pressed("alt+1") and (
+                        not any([keyboard.is_pressed(key) for key in "abcdefgh"])
+                    ):
                         if self.to_sq:
                             self.to_sq = ""
                             self.status.set("[BACK] Cleared 'To' square (Alt+1)")
@@ -207,7 +215,7 @@ class ChessClient:
                                         self.status.set(
                                             f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 1 = back, Alt + 2 = cancel"
                                         )
-                                        time.sleep(0.5)
+                                        time.sleep(0.25)
                                     elif not self.to_sq:
                                         self.to_sq = sq
                                         self.status.set(
@@ -236,17 +244,20 @@ class ChessClient:
 
                             self.first_move = False
                             move = self.from_sq + self.to_sq
+                            self.processing = True
                             self.status.set(f"[Processing] {move}")
                             asyncio.run(self.send_move(move))
                             self.clear_buffer()
                         elif self.first_move:
                             if self.side.get().lower() == "white":
+                                self.first_move = False
                                 self.status.set("[Processing] White's first move")
                                 asyncio.run(self.send_move(None))
                                 self.clear_buffer()
+                                time.sleep(0.25)
                             else:
                                 self.status.set("[Error] Incomplete move")
-                        else:
+                        elif not self.processing:
                             self.status.set("[Error] Incomplete move")
                             break
 
@@ -363,7 +374,9 @@ class ChessClient:
                             move = data["move"]
                             display = f"{move['piece']} {move['from']}→{move['to']}"
                             self.status.set(f"Suggested: {display}")
+                            self.processing = False
                     except Exception as e:
+                        self.processing = False
                         print("[ERROR] Malformed WS data:", msg, e)
         except Exception as e:
             self.status.set("Disconnected")

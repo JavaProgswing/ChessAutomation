@@ -64,6 +64,7 @@ class ChessAutomator:
                 (By.CSS_SELECTOR, 'button[aria-label="Practice vs Computer"]')
             )
         )
+        self.initial_state = self.get_initial_board_state()
         practice_button = self.driver.find_element(
             By.CSS_SELECTOR, 'button[aria-label="Practice vs Computer"]'
         )
@@ -74,7 +75,6 @@ class ChessAutomator:
         print("[INFO] Switched to new Practice tab.")
 
         self.wait.until(EC.presence_of_element_located((By.ID, "board-board")))
-        self.initial_state = self.get_board_state()
 
     def load_bot_list(self):
         if ChessAutomator.BOT_LOADED:
@@ -222,6 +222,42 @@ class ChessAutomator:
             print(f"[WARN] Failed to fetch current bot info: {e}")
             return None
 
+    def get_initial_board_state(self) -> dict:
+        """
+        Parses the current board and returns a dict like:
+        {
+            "88": ("r", "black"),
+            "12": ("p", "white"),
+            ...
+        }
+        where keys are 'square-XY' IDs (like "88", "12") and values are (piece type, color)
+        """
+        board = {}
+        pieces = self.driver.find_elements(
+            By.CSS_SELECTOR, "#board-analysis-board .piece"
+        )
+
+        for piece in pieces:
+            classes = piece.get_attribute("class").split()
+            piece_type = None
+            color = None
+            square = None
+
+            for cls in classes:
+                if cls.startswith("w"):
+                    color = "white"
+                    piece_type = cls[1]  # p, r, n, b, q, k
+                elif cls.startswith("b"):
+                    color = "black"
+                    piece_type = cls[1]
+                elif cls.startswith("square-"):
+                    square = cls.split("-")[1]
+
+            if piece_type and color and square:
+                board[square] = (piece_type, color)
+
+        return board
+
     def get_board_state(self) -> dict:
         """
         Parses the current board and returns a dict like:
@@ -277,9 +313,7 @@ class ChessAutomator:
             print(f"{self.square_index_to_alg(square)}: {color} {piece}")
         print()
 
-    def save_board_state_to_file(self, filename="engine_debug.txt"):
-        board_state = self.get_board_state()
-
+    def save_board_state_to_file(self, board_state, filename="engine_debug.txt"):
         def square_sort_key(sq):
             file = sq[0]
             rank = int(sq[1])
@@ -307,41 +341,93 @@ class ChessAutomator:
         while time.time() - start_time < timeout:
             current_state = self.get_board_state()
 
-            removed_square = None
-            added_square = None
-            moved_piece = None
+            removed_squares = [sq for sq in previous_state if sq not in current_state]
+            added_squares = [sq for sq in current_state if sq not in previous_state]
+            changed_squares = [
+                sq
+                for sq in current_state
+                if sq in previous_state and current_state[sq] != previous_state[sq]
+            ]
 
-            for square in previous_state:
-                if square not in current_state:
-                    removed_square = square
-                    moved_piece = previous_state[square]
-                    break
+            # --- Detect Castling ---
+            if len(removed_squares) == 2 and len(added_squares) == 2:
+                moved_pieces = [previous_state[sq] for sq in removed_squares]
+                if ("k", self.side.value) in moved_pieces and (
+                    "r",
+                    self.side.value,
+                ) in moved_pieces:
+                    king_from = next(
+                        sq for sq in removed_squares if previous_state[sq][0] == "k"
+                    )
+                    king_to = next(
+                        sq for sq in added_squares if current_state[sq][0] == "k"
+                    )
+                    print(
+                        f"[CASTLING DETECTED] King moved from {self.square_index_to_alg(king_from)} to {self.square_index_to_alg(king_to)}"
+                    )
+                    self.driver.save_screenshot("engine.png")
+                    self.save_board_state_to_file(previous_state, "engine_state.txt")
+                    self.save_board_state_to_file(
+                        self.get_board_state(), "engine_state_1.txt"
+                    )
+                    return {
+                        "type": "castling",
+                        "piece": "k",
+                        "from": self.square_index_to_alg(king_from),
+                        "to": self.square_index_to_alg(king_to),
+                        "color": self.side.value,
+                    }
 
-            for square in current_state:
-                if square not in previous_state:
-                    added_square = square
-                    break
+            # --- Detect En Passant ---
+            if len(removed_squares) == 2 and len(added_squares) == 1:
+                capture_sq = removed_squares[0]
+                pawn_sq = removed_squares[1]
+                pawn = previous_state.get(pawn_sq)
+                if pawn and pawn[0] == "p":
+                    print("[EN PASSANT DETECTED]")
+                    self.driver.save_screenshot("engine.png")
+                    self.save_board_state_to_file(previous_state, "engine_state.txt")
+                    self.save_board_state_to_file(
+                        self.get_board_state(), "engine_state_1.txt"
+                    )
+                    return {
+                        "type": "en_passant",
+                        "piece": "p",
+                        "from": self.square_index_to_alg(pawn_sq),
+                        "to": self.square_index_to_alg(added_squares[0]),
+                        "color": pawn[1],
+                    }
 
-            if removed_square and added_square and moved_piece:
-                from_alg = self.square_index_to_alg(removed_square)
-                to_alg = self.square_index_to_alg(added_square)
-                piece_type, color = moved_piece
-
+            # --- Detect Normal or Capture Move ---
+            if len(removed_squares) == 1 and (
+                len(added_squares) == 1 or len(changed_squares) == 1
+            ):
+                from_sq = removed_squares[0]
+                to_sq = added_squares[0] if added_squares else changed_squares[0]
+                piece = previous_state[from_sq]
                 print(
-                    f"[ENGINE MOVE DETECTED - {time.time()-start_time}s] {piece_type.upper()} from {from_alg} to {to_alg}"
+                    f"[ENGINE MOVE DETECTED] {piece[0].upper()} from {self.square_index_to_alg(from_sq)} to {self.square_index_to_alg(to_sq)}"
+                )
+                self.driver.save_screenshot("engine.png")
+                self.save_board_state_to_file(previous_state, "engine_state.txt")
+                self.save_board_state_to_file(
+                    self.get_board_state(), "engine_state_1.txt"
                 )
                 return {
-                    "piece": piece_type,
-                    "from": from_alg,
-                    "to": to_alg,
-                    "color": color,
+                    "piece": piece[0],
+                    "from": self.square_index_to_alg(from_sq),
+                    "to": self.square_index_to_alg(to_sq),
+                    "color": piece[1],
                 }
 
             time.sleep(0.5)
 
         print("[ERROR] Timeout waiting for engine move.")
         self.driver.save_screenshot("engine_timeout.png")
-        self.save_board_state_to_file("engine_timeout_state.txt")
+        self.save_board_state_to_file(previous_state, "engine_timeout_state.txt")
+        self.save_board_state_to_file(
+            self.get_board_state(), "engine_timeout_state_1.txt"
+        )
         raise TimeoutException("No move detected within the timeout period.")
 
     def complete_promotion(self, promote_to: str = "q"):
@@ -380,7 +466,6 @@ class ChessAutomator:
         if opponentMove is None:
             if self.side == ChessSide.BLACK:
                 raise ValueError("opponentMove cannot be None when playing Black.")
-            print("[INFO] Capturing board state before engine move...")
             move = self.wait_for_engine_move(self.initial_state)
             return move
 
@@ -391,13 +476,67 @@ class ChessAutomator:
         move = self.wait_for_engine_move(before)
         return move
 
+    def simulate_board_state(self, state: dict, move: str) -> dict:
+        """
+        Simulates the effect of a move on a given board state.
+        Does NOT apply promotion logic — pawn is just placed on the last rank as-is.
+
+        Args:
+            state (dict): Current board state as {square: (piece, color)}
+            move (str): Move in algebraic notation like 'e2e4'
+
+        Returns:
+            dict: Updated board state
+        """
+        new_state = dict(state)
+
+        from_alg = move[:2]
+        to_alg = move[2:4]
+        from_sq = self.alg_to_square_index(from_alg)
+        to_sq = self.alg_to_square_index(to_alg)
+
+        if from_sq not in new_state:
+            raise ValueError(f"[SIMULATE] No piece at {from_alg} ({from_sq})")
+
+        piece, color = new_state[from_sq]
+
+        # --- Castling detection ---
+        if piece == "k" and abs(ord(from_alg[0]) - ord(to_alg[0])) == 2:
+            if to_alg[0] == "g":  # King-side
+                rook_from = self.alg_to_square_index("h1" if color == "white" else "h8")
+                rook_to = self.alg_to_square_index("f1" if color == "white" else "f8")
+            else:  # Queen-side
+                rook_from = self.alg_to_square_index("a1" if color == "white" else "a8")
+                rook_to = self.alg_to_square_index("d1" if color == "white" else "d8")
+
+            if rook_from in new_state:
+                new_state[rook_to] = new_state.pop(rook_from)
+
+        # --- En Passant ---
+        if piece == "p" and from_alg[0] != to_alg[0] and to_sq not in new_state:
+            capture_rank = (
+                str(int(to_alg[1]) - 1) if color == "white" else str(int(to_alg[1]) + 1)
+            )
+            capture_alg = to_alg[0] + capture_rank
+            capture_sq = self.alg_to_square_index(capture_alg)
+            if capture_sq in new_state and new_state[capture_sq][0] == "p":
+                del new_state[capture_sq]
+
+        # Regular move
+        new_state[to_sq] = (piece, color)
+        del new_state[from_sq]
+
+        return new_state
+
     def simulate_opponent_move(self, move: str):
         print(f"[INFO] Intended move: {move}")
         from_alg = move[:2]
         to_alg = move[2:]
-
-        from_sq = self.alg_to_square_index(from_alg)
-        to_sq = self.alg_to_square_index(to_alg)
+        try:
+            from_sq = self.alg_to_square_index(from_alg)
+            to_sq = self.alg_to_square_index(to_alg)
+        except ValueError:
+            raise ValueError(f"Moves should be in chess notation like 'e2e4'")
 
         try:
             piece_el = self.driver.find_element(
@@ -432,6 +571,7 @@ class ChessAutomator:
             )
 
             # Click the move or capture hint
+            before = self.simulate_board_state(self.get_board_state(), move)
             ActionChains(self.driver).move_to_element(hint_el).click().perform()
             print(
                 f"[INFO] Opponent move {from_alg} → {to_alg} completed via hint square."
@@ -440,12 +580,16 @@ class ChessAutomator:
             print(f"[ERROR] Failed to click hint square {to_alg}: {e}")
             raise ValueError(f"Cannot move own chess piece at {from_alg}.")
 
-        before = self.get_board_state()
         # Check if promotion window appears and current from_alg is a pawn
         try:
-            WebDriverWait(self.driver, 1).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".promotion-window")),
+            # WebDriverWait(self.driver, 1).until(
+            #    EC.presence_of_element_located((By.CSS_SELECTOR, ".promotion-window")),
+            # )
+            promotion_window = self.driver.find_element(
+                By.CSS_SELECTOR, ".promotion-window"
             )
+            if not promotion_window:
+                return before
             self.pending_promotion = {
                 "from": from_alg,
                 "to": to_alg,
@@ -464,6 +608,8 @@ class ChessAutomator:
         a-h maps to 1-8 (left to right)
         8-1 maps to 8-1 (top to bottom)
         """
+        if len(alg) != 2 or alg[0] not in "abcdefgh" or alg[1] not in "12345678":
+            raise ValueError(f"Invalid algebraic notation: {alg}")
         file = ord(alg[0]) - ord("a") + 1  # a=1, h=8
         rank = int(alg[1])  # 1-8
         return f"{file}{rank}"
