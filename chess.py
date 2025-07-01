@@ -23,7 +23,7 @@ class ChessAutomator:
         self.side = side
         self.profile = profiles.Windows()
         options = webdriver.ChromeOptions()
-        # options.add_argument("--headless=new")
+        options.add_argument("--headless=new")
         options.add_argument("--mute-audio")
         options.add_argument("--disable-gpu")
 
