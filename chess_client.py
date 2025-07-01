@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 import threading
 import asyncio
+import uvicorn
 import websockets
 import requests
 import keyboard
@@ -167,23 +168,23 @@ class ChessClient:
     def run_key_listener(self):
         self.processing = False
         while True:
-            if keyboard.is_pressed("alt+3") and (
-                not any([keyboard.is_pressed(key) for key in "abcdefgh"])
-            ):
-                self.listening = not self.listening
-                if not self.listening:
-                    self.show_bot_selector()
-                time.sleep(0.5)
-                continue
-
-            if not self.listening:
-                time.sleep(0.1)
-                continue
-
             if keyboard.is_pressed("alt"):
                 keys = []
                 start_time = time.time()
                 while time.time() - start_time < 10:
+                    if keyboard.is_pressed("alt+3") and (
+                        not any([keyboard.is_pressed(key) for key in "abcdefgh"])
+                    ):
+                        self.listening = not self.listening
+                        if not self.listening:
+                            self.show_bot_selector()
+                        time.sleep(0.5)
+                        continue
+
+                    if not self.listening:
+                        time.sleep(0.1)
+                        continue
+
                     if keyboard.is_pressed("alt+2") and (
                         not any([keyboard.is_pressed(key) for key in "abcdefgh"])
                     ):
@@ -288,7 +289,7 @@ class ChessClient:
         bot_dropdown.pack(pady=4)
         level_label = tk.Label(selector, text="Engine level:", bg="black", fg="white")
         level_scale = tk.Scale(
-            selector, from_=0, to=24, orient="horizontal", bg="black", fg="white"
+            selector, from_=1, to=25, orient="horizontal", bg="black", fg="white"
         )
         bot_dropdown.bind(
             "<<ComboboxSelected>>",
@@ -331,7 +332,6 @@ class ChessClient:
             if engine_level is not None:
                 payload["engine_level"] = engine_level
             await self.ws.send(json.dumps(payload))
-            self.status.set(f"Bot changed to ID {bot_id}")
 
     def run_websocket_loop(self):
         asyncio.run(self.websocket_loop())
@@ -369,7 +369,10 @@ class ChessClient:
                                         f"\n{current_bot}\n"
                                     )
                             else:
+                                initial_status = self.status.get().splitlines()[0]
                                 self.status.set(data["status"])
+                                await asyncio.sleep(5)
+                                self.status.set(f"{initial_status}\n{data['status']}")
                         elif "move" in data:
                             move = data["move"]
                             display = f"{move['piece']} {move['from']}→{move['to']}"
@@ -382,7 +385,16 @@ class ChessClient:
             self.status.set("Disconnected")
 
 
+def run_uvicorn():
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+
+
 if __name__ == "__main__":
+    # Start the FastAPI server in a separate thread
+    server_thread = threading.Thread(target=run_uvicorn, daemon=True)
+    server_thread.start()
+
+    # Start the Tkinter GUI
     root = tk.Tk()
     app = ChessClient(root)
     root.mainloop()

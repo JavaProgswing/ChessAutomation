@@ -23,16 +23,10 @@ class ChessAutomator:
         self.side = side
         self.profile = profiles.Windows()
         options = webdriver.ChromeOptions()
-        options.add_argument("--headless=new")
+        # options.add_argument("--headless=new")
         options.add_argument("--mute-audio")
         options.add_argument("--disable-gpu")
 
-        prefs = {
-            "profile.default_content_setting_values.notifications": 2,
-            "profile.managed_default_content_settings.images": 2,
-        }
-        prefs = {}
-        options.add_experimental_option("prefs", prefs)
         self.driver = Chrome(profile=self.profile, options=options)
         self.wait = WebDriverWait(self.driver, 15)
 
@@ -88,41 +82,68 @@ class ChessAutomator:
             )
             self.driver.execute_script("arguments[0].click();", change_bot_button)
 
-            self.wait.until(
-                EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, "li.bot-component")
+            scroll_container = self.wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "div.bot-selection-scroll")
                 )
             )
-            tiles = self.driver.find_elements(By.CSS_SELECTOR, "li.bot-component")
 
+            seen_bots = set()
             ChessAutomator.BOTS.clear()
 
-            for i, tile in enumerate(tiles):
-                if tile.find_elements(
-                    By.CSS_SELECTOR, "span.cc-icon-glyph.cc-icon-small.bot-lock"
-                ):
-                    continue
+            # Scrolling loop
+            while True:
+                tiles = self.driver.find_elements(By.CSS_SELECTOR, "li.bot-component")
+                for tile in tiles:
+                    name = tile.get_attribute("data-bot-name")
+                    if name in seen_bots:
+                        continue
 
-                name = tile.get_attribute("data-bot-name")
-                classification = tile.get_attribute("data-bot-classification")
-                is_engine = classification.lower() == "engine"
-                avatar_url = None
-                try:
-                    img_el = tile.find_element(By.CSS_SELECTOR, "img.bot-img")
-                    avatar_url = img_el.get_attribute("src")
-                except:
-                    pass
+                    classification = tile.get_attribute("data-bot-classification")
+                    is_locked = tile.find_elements(
+                        By.CSS_SELECTOR, "span.cc-icon-glyph.cc-icon-small.bot-lock"
+                    )
+                    if is_locked:
+                        seen_bots.add(name)
+                        continue
 
-                ChessAutomator.BOTS.append(
-                    {
-                        "id": len(ChessAutomator.BOTS),
-                        "name": name,
-                        "is_engine": is_engine,
-                        "avatar": avatar_url,
-                    }
+                    is_engine = classification.lower() == "engine"
+                    avatar_url = None
+                    try:
+                        img_el = tile.find_element(By.CSS_SELECTOR, "img.bot-img")
+                        avatar_url = img_el.get_attribute("src")
+                    except:
+                        pass
+
+                    ChessAutomator.BOTS.append(
+                        {
+                            "id": len(ChessAutomator.BOTS),
+                            "name": name,
+                            "classification": classification.lower(),
+                            "is_engine": is_engine,
+                            "avatar": avatar_url,
+                        }
+                    )
+                    seen_bots.add(name)
+
+                # Scroll slowly
+                self.driver.execute_script(
+                    "arguments[0].scrollTop += 1200;", scroll_container
                 )
 
-            # ✅ Click back button so no bot is changed
+                # Check if scrolled to bottom
+                is_at_bottom = self.driver.execute_script(
+                    """
+                    let el = arguments[0];
+                    return el.scrollTop + el.offsetHeight >= el.scrollHeight - 5;
+                """,
+                    scroll_container,
+                )
+
+                if is_at_bottom:
+                    break
+
+            # Click back button
             try:
                 back_button = self.driver.find_element(
                     By.CSS_SELECTOR, "button.selection-menu-back"
@@ -133,8 +154,43 @@ class ChessAutomator:
 
             ChessAutomator.BOT_LOADED = True
             print(f"[INFO] {len(ChessAutomator.BOTS)} bots loaded.")
+
         except Exception as e:
             raise Exception(f"[ERROR] Failed to load bot list: {e}")
+
+    def set_slider_value(self, driver, slider_element, target_value):
+        min_val = int(slider_element.get_attribute("min"))
+        max_val = int(slider_element.get_attribute("max"))
+
+        if not (min_val <= target_value <= max_val):
+            raise ValueError(
+                f"Value {target_value} is outside range {min_val}-{max_val}"
+            )
+
+        rating_span = self.wait.until(
+            EC.presence_of_element_located(
+                (By.CSS_SELECTOR, "span.selected-bot-rating")
+            )
+        )
+        initial_rating = rating_span.text.strip()
+        driver.execute_script(
+            """
+            const slider = arguments[0];
+            const value = arguments[1];
+
+            slider.value = value;
+            slider.dispatchEvent(new Event('input', { bubbles: true }));
+            slider.dispatchEvent(new Event('change', { bubbles: true }));
+        """,
+            slider_element,
+            target_value,
+        )
+        self.wait.until(
+            lambda d: d.find_element(
+                By.CSS_SELECTOR, "span.selected-bot-rating"
+            ).text.strip()
+            != initial_rating
+        )
 
     def select_bot(self, bot_id: int, engine_level: int | None = None):
         if not ChessAutomator.BOT_LOADED:
@@ -147,7 +203,10 @@ class ChessAutomator:
         if bot_id < 0 or bot_id >= len(ChessAutomator.BOTS):
             raise ValueError(f"Bot ID {bot_id} is out of range.")
 
+        bot_to_select = ChessAutomator.BOTS[bot_id]
+
         try:
+            # Open the bot selection menu
             change_bot_button = self.wait.until(
                 EC.element_to_be_clickable(
                     (By.CSS_SELECTOR, 'button[aria-label="Change Bot"]')
@@ -155,40 +214,82 @@ class ChessAutomator:
             )
             self.driver.execute_script("arguments[0].click();", change_bot_button)
 
-            self.wait.until(
-                EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, "li.bot-component")
+            scroll_container = self.wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "div.bot-selection-scroll")
                 )
             )
-            tiles = self.driver.find_elements(By.CSS_SELECTOR, "li.bot-component")
 
-            selected_index = 0
-            for i, tile in enumerate(tiles):
-                name = tile.get_attribute("data-bot-name")
-                if name == ChessAutomator.BOTS[bot_id]["name"]:
-                    selected_index = i
+            selected_tile = None
+
+            # Scroll through the bot list to find the correct tile
+            while True:
+                tiles = self.driver.find_elements(By.CSS_SELECTOR, "li.bot-component")
+
+                for tile in tiles:
+                    name = tile.get_attribute("data-bot-name")
+                    classification = tile.get_attribute("data-bot-classification")
+
+                    if (
+                        name == bot_to_select["name"]
+                        and classification.lower()
+                        == bot_to_select.get("classification", "").lower()
+                    ) or (
+                        bot_to_select["is_engine"]
+                        and classification.lower() == "engine"
+                    ):
+                        selected_tile = tile
+                        break
+
+                if selected_tile:
                     break
 
-            selected_tile = tiles[selected_index]
-            self.driver.execute_script("arguments[0].click();", selected_tile)
-            print(f"[INFO] Bot tile clicked: {ChessAutomator.BOTS[bot_id]['name']}")
+                # Scroll down
+                self.driver.execute_script(
+                    "arguments[0].scrollTop += 1200;", scroll_container
+                )
 
-            if ChessAutomator.BOTS[bot_id]["is_engine"] and engine_level is not None:
+                is_at_bottom = self.driver.execute_script(
+                    """
+                    let el = arguments[0];
+                    return el.scrollTop + el.offsetHeight >= el.scrollHeight - 5;
+                """,
+                    scroll_container,
+                )
+
+                if is_at_bottom:
+                    break  # Reached bottom without finding the bot
+
+            if not selected_tile:
+                raise Exception(
+                    f"[ERROR] Could not find bot '{bot_to_select['name']}' in scroll list."
+                )
+
+            # Click the bot tile
+            self.driver.execute_script("arguments[0].click();", selected_tile)
+            print(f"[INFO] Bot tile clicked: {bot_to_select['name']}")
+
+            # If it's an engine, set the slider
+            if bot_to_select["is_engine"] and engine_level is not None:
+                if not (1 <= engine_level <= 25):
+                    raise ValueError(
+                        f"Engine level must be between 1 and 25. Given: {engine_level}"
+                    )
+
+                slider_value = engine_level - 1  # Map level 1–25 → slider range 0–24
+
                 slider = self.wait.until(
                     EC.presence_of_element_located(
-                        (By.CSS_SELECTOR, 'input[type="range"]')
+                        (By.CSS_SELECTOR, 'input.slider-input[type="range"]')
                     )
                 )
-                self.driver.execute_script(
-                    f"""
-                    arguments[0].value = {engine_level};
-                    arguments[0].dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    arguments[0].dispatchEvent(new Event('change', {{ bubbles: true }}));
-                """,
-                    slider,
-                )
+
+                self.set_slider_value(
+                    self.driver, slider, slider_value
+                )  # level 1–25 → value 0–24
                 print(f"[INFO] Engine level set to {engine_level}")
 
+            # Click Choose button
             choose_button = self.wait.until(
                 EC.element_to_be_clickable(
                     (
@@ -203,6 +304,9 @@ class ChessAutomator:
             self.selected_bot = self.get_current_bot()
 
         except Exception as e:
+            import traceback
+
+            traceback.print_exc()
             raise Exception(f"[ERROR] Failed to select bot: {e}")
 
     def get_current_bot(self):
@@ -366,10 +470,6 @@ class ChessAutomator:
                         f"[CASTLING DETECTED] King moved from {self.square_index_to_alg(king_from)} to {self.square_index_to_alg(king_to)}"
                     )
                     self.driver.save_screenshot("engine.png")
-                    self.save_board_state_to_file(previous_state, "engine_state.txt")
-                    self.save_board_state_to_file(
-                        self.get_board_state(), "engine_state_1.txt"
-                    )
                     return {
                         "type": "castling",
                         "piece": "k",
@@ -386,10 +486,6 @@ class ChessAutomator:
                 if pawn and pawn[0] == "p":
                     print("[EN PASSANT DETECTED]")
                     self.driver.save_screenshot("engine.png")
-                    self.save_board_state_to_file(previous_state, "engine_state.txt")
-                    self.save_board_state_to_file(
-                        self.get_board_state(), "engine_state_1.txt"
-                    )
                     return {
                         "type": "en_passant",
                         "piece": "p",
@@ -409,10 +505,7 @@ class ChessAutomator:
                     f"[ENGINE MOVE DETECTED] {piece[0].upper()} from {self.square_index_to_alg(from_sq)} to {self.square_index_to_alg(to_sq)}"
                 )
                 self.driver.save_screenshot("engine.png")
-                self.save_board_state_to_file(previous_state, "engine_state.txt")
-                self.save_board_state_to_file(
-                    self.get_board_state(), "engine_state_1.txt"
-                )
+
                 return {
                     "piece": piece[0],
                     "from": self.square_index_to_alg(from_sq),

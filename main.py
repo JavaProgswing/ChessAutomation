@@ -5,6 +5,7 @@ from typing import Dict
 import json
 import asyncio
 import concurrent.futures
+import time
 
 app = FastAPI()
 connections: Dict[str, WebSocket] = {}
@@ -55,6 +56,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json({"error": "Invalid side."})
                     continue
 
+                start_time = time.time()
                 chess_bot = await asyncio.get_event_loop().run_in_executor(
                     executor,
                     lambda: ChessAutomator(
@@ -74,6 +76,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 current = await asyncio.get_event_loop().run_in_executor(
                     executor, lambda: chess_bot.selected_bot
                 )
+                print(f"Initialization took {(time.time() - start_time):.2f} seconds.")
 
                 await websocket.send_json(
                     {
@@ -111,6 +114,23 @@ async def websocket_endpoint(websocket: WebSocket):
                             "status": f"Promoted to {piece.upper()}",
                             "type": "promote",
                             "piece": piece,
+                        }
+                    )
+                except Exception as e:
+                    await websocket.send_json({"error": str(e)})
+            elif action == "select_bot":
+                bot_id = data.get("bot_id", 0)
+                engine_level = data.get("engine_level", None)
+                try:
+                    await asyncio.get_event_loop().run_in_executor(
+                        executor, lambda: chess_bot.select_bot(bot_id, engine_level)
+                    )
+
+                    await websocket.send_json(
+                        {
+                            "status": f"Selected bot: {chess_bot.selected_bot['name']}",
+                            "type": "select_bot",
+                            "current_bot": chess_bot.selected_bot,
                         }
                     )
                 except Exception as e:
