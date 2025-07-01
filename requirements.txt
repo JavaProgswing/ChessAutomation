@@ -1,0 +1,8 @@
+blinker==1.7.0
+requests
+keyboard
+websockets
+uvicorn
+fastapi
+selenium
+selenium-profiles
