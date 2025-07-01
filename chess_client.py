@@ -8,6 +8,8 @@ import requests
 import keyboard
 import time
 import json
+import os
+import sys
 
 API_URL = "http://127.0.0.1:8000"
 WS_URL = f"{API_URL.replace('http', 'ws')}/ws"
@@ -21,6 +23,7 @@ class ChessClient:
         self.root.geometry("+10+10")
         self.root.overrideredirect(True)
         self.root.configure(bg="black")
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.offset_x = 0
         self.offset_y = 0
@@ -334,6 +337,15 @@ class ChessClient:
                 payload["engine_level"] = engine_level
             await self.ws.send(json.dumps(payload))
 
+    def on_close(self):
+        answer = messagebox.askyesno("Exit", "Do you want to close this app?")
+        if answer:
+            self.root.destroy()
+        else:
+            self.root.destroy()
+            python = sys.executable
+            os.execl(python, python, *sys.argv)
+
     def run_websocket_loop(self):
         asyncio.run(self.websocket_loop())
 
@@ -387,7 +399,13 @@ class ChessClient:
 
 
 def run_uvicorn():
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
+
+
+def run_gui():
+    root = tk.Tk()
+    app = ChessClient(root)
+    root.mainloop()
 
 
 if __name__ == "__main__":
@@ -396,6 +414,4 @@ if __name__ == "__main__":
     server_thread.start()
 
     # Start the Tkinter GUI
-    root = tk.Tk()
-    app = ChessClient(root)
-    root.mainloop()
+    run_gui()

@@ -547,7 +547,7 @@ class ChessAutomator:
                     print(
                         f"[CASTLING DETECTED] King moved from {self.square_index_to_alg(king_from)} to {self.square_index_to_alg(king_to)}"
                     )
-                    self.driver.save_screenshot("engine.png")
+
                     return {
                         "type": "castling",
                         "piece": "k",
@@ -563,7 +563,7 @@ class ChessAutomator:
                 pawn = previous_state.get(pawn_sq)
                 if pawn and pawn[0] == "p":
                     print("[EN PASSANT DETECTED]")
-                    self.driver.save_screenshot("engine.png")
+
                     return {
                         "type": "en_passant",
                         "piece": "p",
@@ -582,7 +582,6 @@ class ChessAutomator:
                 print(
                     f"[ENGINE MOVE DETECTED] {piece[0].upper()} from {self.square_index_to_alg(from_sq)} to {self.square_index_to_alg(to_sq)}"
                 )
-                self.driver.save_screenshot("engine.png")
 
                 return {
                     "piece": piece[0],
