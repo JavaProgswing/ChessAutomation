@@ -1,4 +1,5 @@
-from chess_client import run_uvicorn, run_gui
+from chess_client import run_gui
+from server import run_uvicorn
 import threading
 
 if __name__ == "__main__":

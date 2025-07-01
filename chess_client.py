@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 import threading
 import asyncio
-import uvicorn
 import websockets
 import requests
 import keyboard
@@ -396,20 +395,7 @@ class ChessClient:
             self.status.set("Disconnected")
 
 
-def run_uvicorn():
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
-
-
 def run_gui():
     root = tk.Tk()
     app = ChessClient(root)
     root.mainloop()
-
-
-if __name__ == "__main__":
-    # Start the FastAPI server in a separate thread
-    server_thread = threading.Thread(target=run_uvicorn, daemon=True)
-    server_thread.start()
-
-    # Start the Tkinter GUI
-    run_gui()

@@ -6,6 +6,7 @@ import json
 import asyncio
 import concurrent.futures
 import time
+import uvicorn
 
 app = FastAPI()
 connections: Dict[str, WebSocket] = {}
@@ -152,3 +153,7 @@ async def websocket_endpoint(websocket: WebSocket):
         keepalive_task.cancel()
         executor.shutdown(wait=False)
         print(f"[WS] Connection for client {client_id} closed.")
+
+
+def run_uvicorn():
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
