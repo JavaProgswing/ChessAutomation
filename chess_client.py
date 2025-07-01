@@ -45,7 +45,7 @@ class ChessClient:
         self.close_button.pack(anchor="ne", pady=(0, 4))
 
         self.status = tk.StringVar()
-        self.status.set(
+        self.update_status(
             "\nChess Automation Client\n"
             "Press Alt + a-h1-8 (from)\n"
             "then Alt + a-h1-8 (to)\n"
@@ -144,7 +144,7 @@ class ChessClient:
             messagebox.showerror("API Error", "Server not available at /ping")
             return
 
-        self.status.set("Initializing...")
+        self.update_status("Initializing...")
         self.controls_frame.pack_forget()
         threading.Thread(target=self.run_key_listener, daemon=True).start()
         threading.Thread(target=self.run_websocket_loop, daemon=True).start()
@@ -159,7 +159,7 @@ class ChessClient:
     def clear_buffer(self):
         self.from_sq = ""
         self.to_sq = ""
-        self.status.set("...")
+        self.update_status("...")
 
     def clear_buffer_timeout(self):
         self.from_sq = ""
@@ -189,7 +189,7 @@ class ChessClient:
                         not any([keyboard.is_pressed(key) for key in "abcdefgh"])
                     ):
                         self.clear_buffer()
-                        self.status.set("[CANCELLED] Input cleared (Alt+2)")
+                        self.update_status("[CANCELLED] Input cleared (Alt+2)")
                         break
 
                     if keyboard.is_pressed("alt+1") and (
@@ -197,12 +197,12 @@ class ChessClient:
                     ):
                         if self.to_sq:
                             self.to_sq = ""
-                            self.status.set("[BACK] Cleared 'To' square (Alt+1)")
+                            self.update_status("[BACK] Cleared 'To' square (Alt+1)")
                         elif self.from_sq:
                             self.from_sq = ""
-                            self.status.set("[BACK] Cleared 'From' square (Alt+1)")
+                            self.update_status("[BACK] Cleared 'From' square (Alt+1)")
                         else:
-                            self.status.set("[BACK] Nothing to clear (Alt+1)")
+                            self.update_status("[BACK] Nothing to clear (Alt+1)")
                         break
 
                     for key in "abcdefgh12345678":
@@ -213,13 +213,13 @@ class ChessClient:
                                     sq = "".join(keys[:2])
                                     if not self.from_sq:
                                         self.from_sq = sq
-                                        self.status.set(
+                                        self.update_status(
                                             f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 1 = back, Alt + 2 = cancel"
                                         )
                                         time.sleep(0.25)
                                     elif not self.to_sq:
                                         self.to_sq = sq
-                                        self.status.set(
+                                        self.update_status(
                                             f"[To] {self.to_sq}\nAlt + 1 = back, Alt + 2 = cancel, Alt + ` = confirm"
                                         )
                                     keys.clear()
@@ -246,20 +246,20 @@ class ChessClient:
                             self.first_move = False
                             move = self.from_sq + self.to_sq
                             self.processing = True
-                            self.status.set(f"[Processing] {move}")
+                            self.update_status(f"[Processing] {move}")
                             asyncio.run(self.send_move(move))
                             self.clear_buffer()
                         elif self.first_move:
                             if self.side.get().lower() == "white":
                                 self.first_move = False
-                                self.status.set("[Processing] White's first move")
+                                self.update_status("[Processing] White's first move")
                                 asyncio.run(self.send_move(None))
                                 self.clear_buffer()
                                 time.sleep(0.25)
                             else:
-                                self.status.set("[Error] Incomplete move")
+                                self.update_status("[Error] Incomplete move")
                         elif not self.processing:
-                            self.status.set("[Error] Incomplete move")
+                            self.update_status("[Error] Incomplete move")
                             break
 
                     if keyboard.is_pressed("alt+p"):  # Support Alt + P too
@@ -309,11 +309,11 @@ class ChessClient:
                     json.dumps({"action": "next_move", "opponent_move": move})
                 )
         except Exception as e:
-            self.status.set(f"[WS ERROR] {e}")
+            self.update_status(f"[WS ERROR] {e}")
 
     async def send_promotion(self):
         if not self.ws:
-            self.status.set("Not connected.")
+            self.update_status("Not connected.")
             return
 
         piece = simpledialog.askstring(
@@ -323,9 +323,9 @@ class ChessClient:
             await self.ws.send(
                 json.dumps({"action": "promote", "promote_to": piece.lower()})
             )
-            self.status.set(f"Promotion sent: {piece.upper()}")
+            self.update_status(f"Promotion sent: {piece.upper()}")
         else:
-            self.status.set("Invalid promotion input.")
+            self.update_status("Invalid promotion input.")
 
     async def send_bot_selection(self, bot_id, engine_level=None):
         if self.ws:
@@ -334,6 +334,9 @@ class ChessClient:
                 payload["engine_level"] = engine_level
             await self.ws.send(json.dumps(payload))
 
+    def update_status(self, message):
+        self.root.after(0, lambda: self.status.set(message))
+
     def on_close(self):
         answer = messagebox.askyesno("Exit", "Do you want to close this app?")
         if answer:
@@ -341,7 +344,7 @@ class ChessClient:
             os._exit(0)
         else:
             self.root.destroy()
-            run_gui()
+            threading.Thread(target=run_gui, daemon=True).start()
 
     def run_websocket_loop(self):
         asyncio.run(self.websocket_loop())
@@ -360,7 +363,7 @@ class ChessClient:
                     try:
                         data = json.loads(msg)
                         if "error" in data:
-                            self.status.set("Error: " + data["error"])
+                            self.update_status("Error: " + data["error"])
                         elif "status" in data:
                             if data.get("type") == "init":
                                 self.bots = data.get("bots", [])
@@ -369,30 +372,32 @@ class ChessClient:
                                 current_bot_rating = current_bot.get("rating", "N/A")
                                 current_bot = f"Current Bot: {current_bot_name} ({current_bot_rating})"
                                 if data["side"] == "white":
-                                    self.status.set(
+                                    self.update_status(
                                         "Press Alt + ` to get suggestions."
                                         f"\n{current_bot}\n"
                                     )
                                 else:
-                                    self.status.set(
+                                    self.update_status(
                                         "Copy opponent's move then press Alt + ` to get suggestions."
                                         f"\n{current_bot}\n"
                                     )
                             else:
                                 initial_status = self.status.get().splitlines()[0]
-                                self.status.set(data["status"])
+                                self.update_status(data["status"])
                                 await asyncio.sleep(3)
-                                self.status.set(f"{initial_status}\n{data['status']}")
+                                self.update_status(
+                                    f"{initial_status}\n{data['status']}"
+                                )
                         elif "move" in data:
                             move = data["move"]
                             display = f"{move['piece']} {move['from']}→{move['to']}"
-                            self.status.set(f"Suggested: {display}")
+                            self.update_status(f"Suggested: {display}")
                             self.processing = False
                     except Exception as e:
                         self.processing = False
                         print("[ERROR] Malformed WS data:", msg, e)
         except Exception as e:
-            self.status.set("Disconnected")
+            self.update_status("Disconnected")
 
 
 def run_gui():
