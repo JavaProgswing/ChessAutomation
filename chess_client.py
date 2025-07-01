@@ -23,7 +23,6 @@ class ChessClient:
         self.root.geometry("+10+10")
         self.root.overrideredirect(True)
         self.root.configure(bg="black")
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.offset_x = 0
         self.offset_y = 0
@@ -36,7 +35,7 @@ class ChessClient:
         self.close_button = tk.Button(
             self.main_frame,
             text="×",
-            command=self.root.destroy,
+            command=self.on_close,
             bg="black",
             fg="red",
             borderwidth=0,
