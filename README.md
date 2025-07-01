@@ -39,7 +39,7 @@ This will:
 
 - `Alt + [a-h][1-8]`: Select squares (first = from, second = to)
 - **Alt + &#96;**: Confirm the move
-- **Alt + 1**: Undo move
+- **Alt + 9**: Undo move
 - **Alt + 2**: Cancel the move
 - **Alt + 3**: Open bot selector
 - **Alt + P**: Promote piece (`q`, `r`, `b`, `n`)

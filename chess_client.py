@@ -50,7 +50,7 @@ class ChessClient:
             "Press Alt + a-h1-8 (from)\n"
             "then Alt + a-h1-8 (to)\n"
             "Alt + ` = confirm\n"
-            "Alt + 1 = undo move\n"
+            "Alt + 9 = undo move\n"
             "Alt + 2 = cancel\n"
             "Alt + 3 = change bot\n"
             "Alt + p = promote\n"
@@ -192,7 +192,7 @@ class ChessClient:
                         self.update_status("[CANCELLED] Input cleared (Alt+2)")
                         break
 
-                    if keyboard.is_pressed("alt+1") and (
+                    if keyboard.is_pressed("alt+9") and (
                         not any([keyboard.is_pressed(key) for key in "abcdefgh"])
                     ):
                         self.update_status("[UNDO] Requesting undo...")
@@ -210,13 +210,13 @@ class ChessClient:
                                     if not self.from_sq:
                                         self.from_sq = sq
                                         self.update_status(
-                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 1 = undo move, Alt + 2 = cancel"
+                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 9 = undo move, Alt + 2 = cancel"
                                         )
                                         time.sleep(0.25)
                                     elif not self.to_sq:
                                         self.to_sq = sq
                                         self.update_status(
-                                            f"[To] {self.to_sq}\nAlt + 1 = undo move, Alt + 2 = cancel, Alt + ` = confirm"
+                                            f"[To] {self.to_sq}\nAlt + 9 = undo move, Alt + 2 = cancel, Alt + ` = confirm"
                                         )
                                     keys.clear()
                                     if self.move_timer:

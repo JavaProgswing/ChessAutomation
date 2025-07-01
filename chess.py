@@ -584,6 +584,7 @@ class ChessAutomator:
                     )
 
                     self.waiting_for_engine_move = False
+                    self.driver.save_screenshot("latest_move.png")
                     return {
                         "type": "castling",
                         "piece": "k",
@@ -601,6 +602,7 @@ class ChessAutomator:
                     print("[EN PASSANT DETECTED]")
 
                     self.waiting_for_engine_move = False
+                    self.driver.save_screenshot("latest_move.png")
                     return {
                         "type": "en_passant",
                         "piece": "p",
@@ -621,6 +623,7 @@ class ChessAutomator:
                 )
 
                 self.waiting_for_engine_move = False
+                self.driver.save_screenshot("latest_move.png")
                 return {
                     "piece": piece[0],
                     "from": self.square_index_to_alg(from_sq),
