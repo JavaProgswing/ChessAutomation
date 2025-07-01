@@ -38,13 +38,11 @@ This will:
 ## 🕹️ Keyboard Controls
 
 - `Alt + [a-h][1-8]`: Select squares (first = from, second = to)
-- `Alt + \``: Confirm the move
-- `Alt + 1`: Undo move
-- `Alt + 2`: Cancel the move
-- `Alt + 3`: Open bot selector
-- `Alt + p`: Promote piece (`q`, `r`, `b`, `n`)
-
----
+- **Alt + &#96;**: Confirm the move
+- **Alt + 1**: Undo move
+- **Alt + 2**: Cancel the move
+- **Alt + 3**: Open bot selector
+- **Alt + P**: Promote piece (`q`, `r`, `b`, `n`)
 
 ## 🎛️ Features
 
