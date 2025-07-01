@@ -9,7 +9,6 @@ import keyboard
 import time
 import json
 import os
-import sys
 
 API_URL = "http://127.0.0.1:8000"
 WS_URL = f"{API_URL.replace('http', 'ws')}/ws"
@@ -340,10 +339,10 @@ class ChessClient:
         answer = messagebox.askyesno("Exit", "Do you want to close this app?")
         if answer:
             self.root.destroy()
+            os._exit(0)
         else:
             self.root.destroy()
-            python = sys.executable
-            os.execl(python, python, *sys.argv)
+            run_gui()
 
     def run_websocket_loop(self):
         asyncio.run(self.websocket_loop())

@@ -213,7 +213,6 @@ class ChessAutomator:
             except:
                 pass
 
-            print(ChessAutomator.BOTS)
             ChessAutomator.BOT_LOADED = True
             print(f"[INFO] {len(ChessAutomator.BOTS)} bots loaded.")
 
