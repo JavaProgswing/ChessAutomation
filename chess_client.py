@@ -50,7 +50,7 @@ class ChessClient:
             "Press Alt + a-h1-8 (from)\n"
             "then Alt + a-h1-8 (to)\n"
             "Alt + ` = confirm\n"
-            "Alt + 1 = back\n"
+            "Alt + 1 = undo move\n"
             "Alt + 2 = cancel\n"
             "Alt + 3 = change bot\n"
             "Alt + p = promote\n"
@@ -195,14 +195,10 @@ class ChessClient:
                     if keyboard.is_pressed("alt+1") and (
                         not any([keyboard.is_pressed(key) for key in "abcdefgh"])
                     ):
-                        if self.to_sq:
-                            self.to_sq = ""
-                            self.update_status("[BACK] Cleared 'To' square (Alt+1)")
-                        elif self.from_sq:
-                            self.from_sq = ""
-                            self.update_status("[BACK] Cleared 'From' square (Alt+1)")
-                        else:
-                            self.update_status("[BACK] Nothing to clear (Alt+1)")
+                        self.update_status("[UNDO] Requesting undo...")
+                        asyncio.run(self.send_undo())
+                        self.clear_buffer()
+                        time.sleep(0.3)
                         break
 
                     for key in "abcdefgh12345678":
@@ -214,13 +210,13 @@ class ChessClient:
                                     if not self.from_sq:
                                         self.from_sq = sq
                                         self.update_status(
-                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 1 = back, Alt + 2 = cancel"
+                                            f"[From] {self.from_sq}\n\nWaiting for next square...\nAlt + 1 = undo move, Alt + 2 = cancel"
                                         )
                                         time.sleep(0.25)
                                     elif not self.to_sq:
                                         self.to_sq = sq
                                         self.update_status(
-                                            f"[To] {self.to_sq}\nAlt + 1 = back, Alt + 2 = cancel, Alt + ` = confirm"
+                                            f"[To] {self.to_sq}\nAlt + 1 = undo move, Alt + 2 = cancel, Alt + ` = confirm"
                                         )
                                     keys.clear()
                                     if self.move_timer:
@@ -311,6 +307,13 @@ class ChessClient:
         except Exception as e:
             self.update_status(f"[WS ERROR] {e}")
 
+    async def send_undo(self):
+        if not self.ws:
+            self.update_status("Not connected.")
+            return
+
+        await self.ws.send(json.dumps({"action": "undo"}))
+
     async def send_promotion(self):
         if not self.ws:
             self.update_status("Not connected.")
@@ -381,6 +384,13 @@ class ChessClient:
                                         "Copy opponent's move then press Alt + ` to get suggestions."
                                         f"\n{current_bot}\n"
                                     )
+
+                            elif data.get("type") == "undo":
+                                await asyncio.sleep(0.5)
+                                initial_status = self.status.get()
+                                self.update_status(data["status"])
+                                await asyncio.sleep(3)
+                                self.update_status(initial_status)
                             else:
                                 initial_status = self.status.get().splitlines()[0]
                                 self.update_status(data["status"])

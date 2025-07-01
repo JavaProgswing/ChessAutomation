@@ -142,7 +142,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                 except Exception as e:
                     await websocket.send_json({"error": str(e)})
-
+            elif action == "undo":
+                try:
+                    await asyncio.get_event_loop().run_in_executor(
+                        executor, lambda: chess_bot.undo_last_move()
+                    )
+                    await websocket.send_json(
+                        {"status": "Undid last move.", "type": "undo"}
+                    )
+                except Exception as e:
+                    await websocket.send_json({"error": str(e)})
             else:
                 await websocket.send_json({"error": "Unknown action."})
 

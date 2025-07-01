@@ -34,6 +34,7 @@ class ChessAutomator:
         self.pending_promotion = None
         self.open_analysis_and_start()
         self.selected_bot = self.get_current_bot()
+        self.waiting_for_engine_move = False
 
     def open_analysis_and_start(self):
         self.driver.get("https://www.chess.com/analysis?tab=analysis")
@@ -381,9 +382,6 @@ class ChessAutomator:
             self.selected_bot = self.get_current_bot()
 
         except Exception as e:
-            import traceback
-
-            traceback.print_exc()
             raise Exception(f"[ERROR] Failed to select bot: {e}")
 
     def get_current_bot(self):
@@ -402,6 +400,44 @@ class ChessAutomator:
         except Exception as e:
             print(f"[WARN] Failed to fetch current bot info: {e}")
             return None
+
+    def undo_last_move(self):
+        """
+        Clicks the undo button to revert the last move.
+        """
+        try:
+            while self.waiting_for_engine_move:
+                print("[INFO] Waiting for engine move to complete before undoing.")
+                time.sleep(1)
+            nodes = self.driver.find_elements(By.CSS_SELECTOR, "div.node")
+            if len(nodes) < 2:
+                print("[WARN] Not enough moves to undo.")
+                return
+
+            undo_button = self.wait.until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, 'button[aria-label="Move Back"]')
+                )
+            )
+            previous_state = self.get_board_state()
+            ActionChains(self.driver).move_to_element(undo_button).click().perform()
+            while True:
+                current_state = self.get_board_state()
+                if current_state != previous_state:
+                    break
+                else:
+                    print("[INFO] Waiting for board to update after undo...")
+                    time.sleep(0.5)
+
+            undo_button = self.wait.until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, 'button[aria-label="Move Back"]')
+                )
+            )
+            ActionChains(self.driver).move_to_element(undo_button).click().perform()
+            print("[INFO] Last move undone.")
+        except Exception as e:
+            raise Exception(f"[ERROR] Failed to undo last move: {e}")
 
     def get_initial_board_state(self) -> dict:
         """
@@ -517,7 +553,7 @@ class ChessAutomator:
 
     def wait_for_engine_move(self, previous_state: dict, timeout: int = 35):
         print("[INFO] Waiting for engine move...")
-
+        self.waiting_for_engine_move = True
         start_time = time.time()
         while time.time() - start_time < timeout:
             current_state = self.get_board_state()
@@ -547,6 +583,7 @@ class ChessAutomator:
                         f"[CASTLING DETECTED] King moved from {self.square_index_to_alg(king_from)} to {self.square_index_to_alg(king_to)}"
                     )
 
+                    self.waiting_for_engine_move = False
                     return {
                         "type": "castling",
                         "piece": "k",
@@ -563,6 +600,7 @@ class ChessAutomator:
                 if pawn and pawn[0] == "p":
                     print("[EN PASSANT DETECTED]")
 
+                    self.waiting_for_engine_move = False
                     return {
                         "type": "en_passant",
                         "piece": "p",
@@ -582,6 +620,7 @@ class ChessAutomator:
                     f"[ENGINE MOVE DETECTED] {piece[0].upper()} from {self.square_index_to_alg(from_sq)} to {self.square_index_to_alg(to_sq)}"
                 )
 
+                self.waiting_for_engine_move = False
                 return {
                     "piece": piece[0],
                     "from": self.square_index_to_alg(from_sq),
@@ -592,6 +631,7 @@ class ChessAutomator:
             time.sleep(0.5)
 
         print("[ERROR] Timeout waiting for engine move.")
+        self.waiting_for_engine_move = False
         self.driver.save_screenshot("engine_timeout.png")
         self.save_board_state_to_file(previous_state, "engine_timeout_state.txt")
         self.save_board_state_to_file(
