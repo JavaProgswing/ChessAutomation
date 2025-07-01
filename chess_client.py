@@ -283,7 +283,8 @@ class ChessClient:
         selector.attributes("-topmost", True)
         tk.Label(selector, text="Choose bot:", bg="black", fg="white").pack(pady=4)
         bot_names = [
-            f"{b['name']} ({'ENGINE' if b['is_engine'] else 'BOT'})" for b in self.bots
+            b["name"] if b["is_engine"] else f"{b['name']}({b['rating']})"
+            for b in self.bots
         ]
         bot_dropdown = ttk.Combobox(selector, values=bot_names, state="readonly")
         bot_dropdown.pack(pady=4)
@@ -371,7 +372,7 @@ class ChessClient:
                             else:
                                 initial_status = self.status.get().splitlines()[0]
                                 self.status.set(data["status"])
-                                await asyncio.sleep(5)
+                                await asyncio.sleep(3)
                                 self.status.set(f"{initial_status}\n{data['status']}")
                         elif "move" in data:
                             move = data["move"]

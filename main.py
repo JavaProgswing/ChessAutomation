@@ -70,7 +70,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         executor, lambda: chess_bot.load_bot_list()
                     )
                 bots = [
-                    {"id": b["id"], "name": b["name"], "is_engine": b["is_engine"]}
+                    {
+                        "id": b["id"],
+                        "name": b["name"],
+                        "rating": b.get("rating", None),
+                        "avatar": b.get("avatar", None),
+                        "is_engine": b["is_engine"],
+                    }
                     for b in ChessAutomator.BOTS
                 ]
                 current = await asyncio.get_event_loop().run_in_executor(
@@ -128,7 +134,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     await websocket.send_json(
                         {
-                            "status": f"Selected bot: {chess_bot.selected_bot['name']}",
+                            "status": f"Selected bot: {chess_bot.selected_bot['name']} ({chess_bot.selected_bot['rating']})",
                             "type": "select_bot",
                             "current_bot": chess_bot.selected_bot,
                         }

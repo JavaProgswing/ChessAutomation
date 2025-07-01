@@ -92,6 +92,7 @@ class ChessAutomator:
             ChessAutomator.BOTS.clear()
 
             # Scrolling loop
+            first_bot = True
             while True:
                 tiles = self.driver.find_elements(By.CSS_SELECTOR, "li.bot-component")
                 for tile in tiles:
@@ -99,7 +100,6 @@ class ChessAutomator:
                     if name in seen_bots:
                         continue
 
-                    classification = tile.get_attribute("data-bot-classification")
                     is_locked = tile.find_elements(
                         By.CSS_SELECTOR, "span.cc-icon-glyph.cc-icon-small.bot-lock"
                     )
@@ -107,24 +107,85 @@ class ChessAutomator:
                         seen_bots.add(name)
                         continue
 
+                    if not first_bot:
+                        name_el = self.driver.find_element(
+                            By.CSS_SELECTOR, "span.selected-bot-name"
+                        )
+                        initial_name = name_el.text.strip()
+
+                        self.driver.execute_script("arguments[0].click();", tile)
+
+                        self.wait.until(
+                            lambda d: d.find_element(
+                                By.CSS_SELECTOR, "span.selected-bot-name"
+                            ).text.strip()
+                            != initial_name
+                        )
+
+                    first_bot = False
+
+                    classification = tile.get_attribute("data-bot-classification")
                     is_engine = classification.lower() == "engine"
                     avatar_url = None
                     try:
                         img_el = tile.find_element(By.CSS_SELECTOR, "img.bot-img")
                         avatar_url = img_el.get_attribute("src")
                     except:
-                        pass
+                        avatar_url = None
+                        print(f"[WARN] No avatar found for bot '{name}'")
 
-                    ChessAutomator.BOTS.append(
-                        {
-                            "id": len(ChessAutomator.BOTS),
-                            "name": name,
-                            "classification": classification.lower(),
-                            "is_engine": is_engine,
-                            "avatar": avatar_url,
-                        }
-                    )
-                    seen_bots.add(name)
+                    if is_engine:
+                        slider = self.wait.until(
+                            EC.presence_of_element_located(
+                                (By.CSS_SELECTOR, 'input.slider-input[type="range"]')
+                            )
+                        )
+                        self.set_slider_value(
+                            self.driver,
+                            slider,
+                            int(slider.get_attribute("min")),
+                        )
+                        rating_start = self.driver.find_element(
+                            By.CSS_SELECTOR, "span.selected-bot-rating"
+                        ).text.strip("()")
+
+                        self.set_slider_value(
+                            self.driver,
+                            slider,
+                            int(slider.get_attribute("max")),
+                        )
+                        rating_end = self.driver.find_element(
+                            By.CSS_SELECTOR, "span.selected-bot-rating"
+                        ).text.strip("()")
+
+                        name = f"Engine ({rating_start}-{rating_end})"
+
+                        ChessAutomator.BOTS.append(
+                            {
+                                "id": len(ChessAutomator.BOTS),
+                                "name": name,
+                                "classification": classification.lower(),
+                                "is_engine": is_engine,
+                                "avatar": avatar_url,
+                            }
+                        )
+                        seen_bots.add(name)
+                    else:
+                        rating = self.driver.find_element(
+                            By.CSS_SELECTOR, "span.selected-bot-rating"
+                        ).text.strip("()")
+
+                        ChessAutomator.BOTS.append(
+                            {
+                                "id": len(ChessAutomator.BOTS),
+                                "name": name,
+                                "rating": rating,
+                                "classification": classification.lower(),
+                                "is_engine": is_engine,
+                                "avatar": avatar_url,
+                            }
+                        )
+                        seen_bots.add(name)
 
                 # Scroll slowly
                 self.driver.execute_script(
@@ -152,6 +213,7 @@ class ChessAutomator:
             except:
                 pass
 
+            print(ChessAutomator.BOTS)
             ChessAutomator.BOT_LOADED = True
             print(f"[INFO] {len(ChessAutomator.BOTS)} bots loaded.")
 
@@ -167,12 +229,25 @@ class ChessAutomator:
                 f"Value {target_value} is outside range {min_val}-{max_val}"
             )
 
+        # Get current value of the slider
+        current_value = int(
+            driver.execute_script("return arguments[0].value;", slider_element)
+        )
+
+        # If the value is already set, skip
+        if current_value == target_value:
+            print(f"[INFO] Slider already at value {target_value}, no change needed.")
+            return
+
+        # Get current rating text before change
         rating_span = self.wait.until(
             EC.presence_of_element_located(
                 (By.CSS_SELECTOR, "span.selected-bot-rating")
             )
         )
         initial_rating = rating_span.text.strip()
+
+        # Set new value via JS
         driver.execute_script(
             """
             const slider = arguments[0];
@@ -181,16 +256,19 @@ class ChessAutomator:
             slider.value = value;
             slider.dispatchEvent(new Event('input', { bubbles: true }));
             slider.dispatchEvent(new Event('change', { bubbles: true }));
-        """,
+            """,
             slider_element,
             target_value,
         )
+
+        # Wait for the rating to change
         self.wait.until(
             lambda d: d.find_element(
                 By.CSS_SELECTOR, "span.selected-bot-rating"
             ).text.strip()
             != initial_rating
         )
+        print(f"[INFO] Slider value set to {target_value}")
 
     def select_bot(self, bot_id: int, engine_level: int | None = None):
         if not ChessAutomator.BOT_LOADED:
