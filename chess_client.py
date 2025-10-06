@@ -348,12 +348,14 @@ class ChessClient:
         self.move_timer = None
         self.processing = False
         self.bots = []
+        self.engine_move_pending = False
 
     # -------------------- Clear buffer --------------------
     def clear_buffer(self):
         self.from_sq = ""
         self.to_sq = ""
         self.key_buffer.clear()
+        self.selected = None
         self.update_status("[Clear] From Square")
 
     # -------------------- Bot selector --------------------
@@ -1079,15 +1081,15 @@ class ChessClient:
                         self.update_bot_display(bot)
 
                         board_state = state
-                        self.board_frame.update_board(
-                            board_state, f"{data.get('from')}{data.get('to')}"
-                        )
+                        self.board_frame.update_board(board_state)
                         waiting_for_init = False
 
                     if msg_type == "engine_move" and state:
                         board_state = state
+                        self.engine_move_pending = False
                         self.board_frame.update_board(
-                            board_state, f"{data.get('from')}{data.get('to')}"
+                            board_state,
+                            f"{data['move']['from']}{data['move']['to']}",
                         )
 
                     status_msg = data.get("status") or data.get("error") or str(data)
@@ -1113,7 +1115,19 @@ class ChessClient:
         if not self.from_sq or not self.to_sq or not self.game_active:
             self.update_status("[ERROR] Invalid move")
             return
+
+        current_time = time.time()
+
+        def update_status_with_time():
+            while self.engine_move_pending:
+                elapsed = time.time() - current_time
+                self.update_status(f"Getting move suggestion... ({elapsed:.2f}s)")
+                time.sleep(0.1)
+
+        self.update_status("Getting move suggestion...")
+        threading.Thread(target=update_status_with_time, daemon=True).start()
         asyncio.run(self.send_move(self.from_sq, self.to_sq))
+        self.engine_move_pending = True
         self.from_sq = ""
         self.to_sq = ""
 
