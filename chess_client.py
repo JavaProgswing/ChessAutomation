@@ -1077,7 +1077,6 @@ class ChessClient:
                     if msg_type == "init" and data.get("current_bot"):
                         bot = data["current_bot"]
                         self.bots = data.get("bots", [])
-                        print("Available bots:", self.bots)
                         self.update_bot_display(bot)
 
                         board_state = state
