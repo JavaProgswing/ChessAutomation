@@ -2,3 +2,4 @@ requests
 keyboard
 websockets
 chess
+pyinstaller

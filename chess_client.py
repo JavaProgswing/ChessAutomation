@@ -517,63 +517,83 @@ class ChessClient:
             loading.pack(pady=(4, 0))
             login_win.update()
 
-            try:
-                profile_req = requests.get(f"{API_URL}/api/chess/profile/{username}")
-                profile = profile_req.json()
-                if profile_req.status_code != 200:
-                    raise Exception(profile.get("error", "Unknown error"))
+            # Disable input while loading
+            entry.config(state="disabled")
+            
+            def login_thread():
+                try:
+                    profile_req = requests.get(f"{API_URL}/api/chess/profile/{username}", timeout=10)
+                    if profile_req.status_code != 200:
+                        try:
+                            err_msg = profile_req.json().get("error", "Unknown error")
+                        except:
+                            err_msg = f"HTTP {profile_req.status_code}"
+                        raise Exception(err_msg)
+                    profile = profile_req.json()
 
-                games_req = requests.get(f"{API_URL}/api/chess/games/{username}")
-                games = games_req.json()
-                if games_req.status_code != 200:
-                    raise Exception(games.get("error", "Unknown error"))
+                    games_req = requests.get(f"{API_URL}/api/chess/games/{username}", timeout=10)
+                    if games_req.status_code != 200:
+                        try:
+                            err_msg = games_req.json().get("error", "Unknown error")
+                        except:
+                            err_msg = f"HTTP {games_req.status_code}"
+                        raise Exception(err_msg)
+                    games = games_req.json()
 
-            except Exception as e:
+                    # Process games in thread
+                    for g in games:
+                        w_name = g["white"]["username"]
+                        b_name = g["black"]["username"]
+                        w_res = g["white"].get("result", "")
+                        b_res = g["black"].get("result", "")
+                        if w_res.lower() in [
+                            "agreed",
+                            "repetition",
+                            "insufficient",
+                            "stalemate",
+                        ] or b_res.lower() in [
+                            "agreed",
+                            "repetition",
+                            "insufficient",
+                            "stalemate",
+                        ]:
+                            g["display_result"] = f"Draw by {w_res or b_res}"
+                        elif w_res != b_res:
+                            g["display_result"] = f"{w_name if w_res=='win' else b_name} won"
+                        else:
+                            g["display_result"] = w_res.capitalize()
+
+                        try:
+                            pgn_io = io.StringIO(g.get("pgn", ""))
+                            game_pgn = pgn.read_game(pgn_io)
+                            g["halfmove_count"] = (
+                                len(list(game_pgn.mainline_moves())) if game_pgn else 0
+                            )
+                        except Exception:
+                            g["halfmove_count"] = max(0, len(g.get("pgn", "").split()))
+
+                    # Schedule UI update on main thread
+                    self.root.after(0, lambda: on_login_success(profile, games))
+
+                except Exception as e:
+                    self.root.after(0, lambda: on_login_error(e))
+
+            def on_login_success(profile, games):
+                login_win.destroy()
+                self.login_btn.pack_forget()
+                self.continue_btn.pack_forget()
+                self.show_games(profile, games)
+
+            def on_login_error(e):
+                loading.destroy()
+                entry.config(state="normal")
                 if isinstance(e, requests.exceptions.ConnectionError):
                     error_label.config(text="Error: API server not reachable")
-                    return
-                loading.destroy()
-                log_exception(e)
-                error_label.config(text=f"Error: {str(e)}")
-                return
-
-            # ===== Process games =====
-            for g in games:
-                w_name = g["white"]["username"]
-                b_name = g["black"]["username"]
-                w_res = g["white"].get("result", "")
-                b_res = g["black"].get("result", "")
-                if w_res.lower() in [
-                    "agreed",
-                    "repetition",
-                    "insufficient",
-                    "stalemate",
-                ] or b_res.lower() in [
-                    "agreed",
-                    "repetition",
-                    "insufficient",
-                    "stalemate",
-                ]:
-                    g["display_result"] = f"Draw by {w_res or b_res}"
-                elif w_res != b_res:
-                    g["display_result"] = f"{w_name if w_res=='win' else b_name} won"
                 else:
-                    g["display_result"] = w_res.capitalize()
+                    log_exception(e)
+                    error_label.config(text=f"Error: {str(e)}")
 
-                try:
-                    pgn_io = io.StringIO(g.get("pgn", ""))
-                    game_pgn = pgn.read_game(pgn_io)
-                    g["halfmove_count"] = (
-                        len(list(game_pgn.mainline_moves())) if game_pgn else 0
-                    )
-                except Exception:
-                    g["halfmove_count"] = max(0, len(g.get("pgn", "").split()))
-
-            # ===== Success =====
-            login_win.destroy()
-            self.login_btn.pack_forget()
-            self.continue_btn.pack_forget()
-            self.show_games(profile, games)
+            threading.Thread(target=login_thread, daemon=True).start()
 
         tk.Button(
             login_win,
