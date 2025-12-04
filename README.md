@@ -2,6 +2,8 @@
 
 This is a desktop automation tool that assists in making chess moves via a GUI interface. It interacts with a remote backend server and can provide suggestions, send moves, and integrate with Selenium-based automation.
 
+**Backend Repository:** [https://github.com/JavaProgswing/chess-server](https://github.com/JavaProgswing/chess-server)
+
 ---
 
 ## 📦 Requirements
@@ -22,6 +24,7 @@ Make sure you have:
 ## 🚀 How to Start
 
 1. **Start the Backend Server**:
+   You can run the provided JAR or run from source (see [Server Details](#-chess-server-backend) below).
    ```bash
    java -jar server/chess-server-0.0.1.jar
    ```
@@ -77,3 +80,29 @@ If `keyboard` module doesn’t capture keys:
 MIT — free to use, modify, and share.
 
 ---
+
+# ♟️ Chess Server (Backend)
+
+Spring Boot application for chess server functionalities.
+
+**Repository:** [https://github.com/JavaProgswing/chess-server](https://github.com/JavaProgswing/chess-server)
+
+## Tech Stack
+- Java 17
+- Spring Boot 3.5.5
+- Selenium
+- ChessLib
+- PostgreSQL
+
+## Prerequisites
+- Java 17
+- Maven
+- PostgreSQL
+
+## Setup & Run (From Source)
+1. Clone the repository.
+2. Ensure PostgreSQL is running and configured.
+3. Run the application:
+   ```bash
+   mvn spring-boot:run
+   ```
