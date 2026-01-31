@@ -12,8 +12,10 @@ import chess
 import io
 from chess import pgn
 
-API_URL = "http://127.0.0.1:8000"
-WS_URL = f"{API_URL.replace('http', 'ws')}/ws"
+# API_URL = "http://127.0.0.1:8000"
+# WS_URL = f"{API_URL.replace('http', 'ws')}/ws"
+API_URL = "https://yashasviallen.is-a.dev/chess"
+WS_URL = API_URL.replace("http", "ws") + "/ws"
 
 PIECES = {
     "wK": "♔",
@@ -104,6 +106,7 @@ class ChessBoard(tk.Frame):
     def on_click(self, row, col):
         if not self.client.listening or not self.client.game_active:
             return
+
         square = f"{chr(ord('a') + col)}{8 - row}"
         if not self.selected:
             self.selected = (row, col)
@@ -519,10 +522,12 @@ class ChessClient:
 
             # Disable input while loading
             entry.config(state="disabled")
-            
+
             def login_thread():
                 try:
-                    profile_req = requests.get(f"{API_URL}/api/chess/profile/{username}", timeout=10)
+                    profile_req = requests.get(
+                        f"{API_URL}/api/chess/profile/{username}", timeout=10
+                    )
                     if profile_req.status_code != 200:
                         try:
                             err_msg = profile_req.json().get("error", "Unknown error")
@@ -531,7 +536,9 @@ class ChessClient:
                         raise Exception(err_msg)
                     profile = profile_req.json()
 
-                    games_req = requests.get(f"{API_URL}/api/chess/games/{username}", timeout=10)
+                    games_req = requests.get(
+                        f"{API_URL}/api/chess/games/{username}", timeout=10
+                    )
                     if games_req.status_code != 200:
                         try:
                             err_msg = games_req.json().get("error", "Unknown error")
@@ -559,7 +566,9 @@ class ChessClient:
                         ]:
                             g["display_result"] = f"Draw by {w_res or b_res}"
                         elif w_res != b_res:
-                            g["display_result"] = f"{w_name if w_res=='win' else b_name} won"
+                            g["display_result"] = (
+                                f"{w_name if w_res=='win' else b_name} won"
+                            )
                         else:
                             g["display_result"] = w_res.capitalize()
 
@@ -1105,12 +1114,12 @@ class ChessClient:
 
                     if msg_type == "engine_move" and state:
                         board_state = state
-                        self.engine_move_pending = False
                         self.board_frame.update_board(
                             board_state,
                             f"{data['move']['from']}{data['move']['to']}",
                         )
 
+                    self.engine_move_pending = False
                     status_msg = data.get("status") or data.get("error") or str(data)
                     self.update_status(f"WS ▶ {status_msg}")
         except Exception as e:
